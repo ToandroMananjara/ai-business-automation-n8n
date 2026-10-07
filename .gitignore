@@ -1,0 +1,19 @@
+# Secrets
+.env
+*.key
+credentials/
+
+# Données locales des conteneurs
+n8n_data/
+omniroute_data/
+
+# Système et éditeurs
+.DS_Store
+.vscode/
+.idea/
+
+# Node
+node_modules/
+
+# Sorties brutes d'évaluation (seul eval/results.md est versionné)
+eval/runs/
