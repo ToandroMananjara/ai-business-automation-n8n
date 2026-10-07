@@ -6,7 +6,7 @@
 | **Dépôt** | `ai-business-automation-n8n` |
 | **Type** | Prototype de démonstration (MVP) |
 | **Auteur** | Toandromananjara Mahasalotra |
-| **Version** | 3.1 — 2026-10-07 |
+| **Version** | 3.2 — 2026-10-07 |
 
 Historique des versions :
 
@@ -16,6 +16,7 @@ Historique des versions :
 | 2.1 | Retrait de la passerelle OmniRoute, appels directs à Groq et Gemini |
 | 3.0 | Alignement sur le fonctionnement réel d'un centre d'appel : filtrage, rattachement, routage par équipe, délais de réponse, catégorie `CANDIDATURE`, registre `tickets` |
 | 3.1 | Règles d'étiquetage sourcées : une intention principale par demande, demandes secondaires conservées, ambiguïté redéfinie, seuils de réussite fixés avant la mesure |
+| 3.2 | Modèles choisis après test comparatif ; calendrier dans le message envoyé au modèle ; filet de sécurité des 48 heures dans le code |
 
 ---
 
@@ -154,7 +155,7 @@ Conséquence : une décision du système peut toujours être expliquée par une 
 
 ### 4.3 Une seule source de vérité pour les règles métier
 
-Toutes les règles métier sont dans **`config/business_rules.json`** : catégories et priorités autorisées, table de routage, délais de réponse, conditions de revue humaine, règles de filtrage, fenêtre de rattachement.
+Toutes les règles métier sont dans **`config/business_rules.json`** : catégories et priorités autorisées, ordre des intentions, table de routage, délais de réponse, relèvement de priorité à l'approche d'une échéance, conditions de revue humaine, règles de filtrage, fenêtre de rattachement.
 
 ```mermaid
 flowchart LR
@@ -273,7 +274,11 @@ Les publicités ne sont pas filtrées par règle (trop variables) : le LLM les c
 
 Un seul appel produit classification et extraction : moins de latence, moins de tokens, une seule sortie à valider.
 
-L'appel part vers le modèle principal (Groq). S'il échoue malgré les relances, la sortie d'erreur du node envoie la même requête au modèle de secours (Gemini). Le nom du modèle qui a répondu est conservé dans la colonne `model`.
+L'appel part vers le modèle principal (Groq, `qwen/qwen3.8-27b`). S'il échoue malgré les relances, la sortie d'erreur du node envoie la même requête au modèle de secours (Google, `gemini-3.1-flash-lite`). Le nom du modèle qui a répondu est conservé dans la colonne `model`. Le choix des modèles est documenté dans `eval/model-selection.md`.
+
+Le message envoyé au modèle contient, en plus de l'email normalisé, la date de réception avec son jour et un **calendrier des 14 jours suivants** (« mardi 13 octobre = 2026-10-13 »). Le modèle lit la date correspondant à « mardi prochain » au lieu de la calculer : lors du test comparatif, les erreurs de calcul de dates étaient la principale source d'erreurs.
+
+Les requêtes HTTP vers les fournisseurs envoient un en-tête `User-Agent` explicite : Cloudflare, devant l'API de Groq, refuse les requêtes qui n'en ont pas (erreur 403, « error code: 1010 »).
 
 ```json
 {
@@ -354,6 +359,8 @@ Le routage est **déterminé par le code**, à partir de la catégorie, et non d
 | `CANDIDATURE` | `RECRUTEMENT` |
 
 Les trois équipes sont celles que cite l'offre : téléopérateurs, chargés de suivi client, recrutement.
+
+**Filet de sécurité sur la priorité.** Avant le routage, le code relève la priorité au moins à `HIGH` si `requested_date` tombe moins de 48 heures après `received_at`, quelle que soit la réponse du modèle (clé `deadline_escalation` de `config/business_rules.json`). Le modèle garde la règle des 48 heures pour les cas que le code ne peut pas voir : une relance, ou une échéance qui ne concerne pas une intervention.
 
 L'échéance de réponse (`due_at`) découle de la priorité (clé `response_delay_hours`) :
 
@@ -529,9 +536,11 @@ Chaque prompt définit :
 - le schéma JSON exact attendu, sans texte autour ;
 - la consigne de **retourner `null` pour toute information absente** et l'interdiction d'inventer ;
 - la consigne de positionner `ambiguous: true` en cas de doute ;
-- deux ou trois exemples, dont un avec des champs manquants.
+- deux ou trois exemples, dont un avec des champs manquants. **Aucun exemple ne vient du jeu de test** : le modèle ne doit pas voir les réponses attendues de l'évaluation.
 
-Quand le modèle le permet, son mode de sortie structurée (JSON schema) est utilisé en plus de la validation côté n8n.
+Les listes de valeurs du prompt (catégories, priorités, ordre des intentions) ne sont pas écrites en dur : elles sont injectées depuis `config/business_rules.json` au moment de l'appel.
+
+Le mode de sortie structurée (`response_format` de type `json_schema`) est utilisé, en plus de la validation côté n8n. Les trois modèles Groq testés et Gemini l'acceptent.
 
 ---
 
@@ -729,8 +738,11 @@ ai-business-automation-n8n/
 │   ├── invoices/
 │   └── faq.csv
 ├── eval/
-│   ├── baseline_keywords.js
-│   ├── run_eval.js
+│   ├── llm.py
+│   ├── compare_models.py
+│   ├── model-selection.md
+│   ├── baseline_keywords.py
+│   ├── run_eval.py
 │   └── results.md
 ├── scripts/
 │   ├── init_env.sh
@@ -760,6 +772,8 @@ ai-business-automation-n8n/
 | Hébergement n8n | **Docker en local** (édition Community) | Gratuit, sans limite d'exécutions ni d'expiration ; reproductible avec `docker compose up` |
 | LLM principal | **Groq**, offre gratuite officielle, appel direct | Réponses en 0,4 à 2 s lors des tests ; sortie JSON structurée |
 | LLM de secours | **Google Gemini**, offre gratuite officielle, appel direct | Fournisseur indépendant de Groq |
+| Modèle principal | **Groq `qwen/qwen3.8-27b`** | Aucune erreur sur le test comparatif, le plus rapide (0,8 s), aucun token de raisonnement (`eval/model-selection.md`) |
+| Modèle de secours | **Google `gemini-3.1-flash-lite`** | Aussi précis, plus lent ; autre fournisseur que le principal |
 | Bascule entre fournisseurs | **Dans n8n**, par la sortie d'erreur du node principal | Visible et testable |
 | Entrée des emails | **Webhook** ; Gmail en V2 | Mécanisme réel d'intégration avec un CRM ou un ticketing ; tests rejouables |
 | Lieu du tri | **Registre `tickets`**, substitut d'un CRM ; pas de libellés Gmail | Un centre d'appel trie dans son outil de travail, pas dans la boîte mail |
@@ -780,7 +794,7 @@ Une dépendance qu'on ne peut pas déboguer va contre l'objectif d'automatisatio
 
 ### 19.3 Contraintes induites par les LLM gratuits
 
-- **Quota mesuré (Groq, 2026-10-07)** : 1 000 requêtes par jour et **8 000 tokens par minute**. Le plafond réel est celui des tokens : prompts compacts, FAQ filtrée par catégorie, raisonnement des modèles `gpt-oss` réglé au minimum, filtrage avant le LLM.
+- **Quota mesuré (Groq, 2026-10-07)** : 1 000 requêtes par jour et **8 000 tokens par minute**. Un appel de classification consomme environ 2 450 tokens, soit environ 3 appels par minute. Le plafond réel est celui des tokens : prompts compacts, FAQ filtrée par catégorie, raisonnement des modèles `gpt-oss` réglé au minimum, filtrage avant le LLM.
 - **Modèle figé pour l'évaluation** : modèle principal seul ; le secours est évalué séparément.
 - **Modèle tracé** : colonne `model` dans `tickets`, `cv` et `invoices`.
 - **Sortie structurée inégale** : la validation côté n8n reste la garantie principale.
@@ -791,7 +805,6 @@ Une dépendance qu'on ne peut pas déboguer va contre l'objectif d'automatisatio
 
 | Décision | Options | Impact |
 |---|---|---|
-| Modèles principal et de secours | À choisir après un test comparatif sur 5 emails | Qualité de l'extraction, respect du JSON |
 | Canal de notification | Email, Slack, Telegram | Simplicité de configuration |
 | Date limite de candidature | À fixer | Découpage du planning (§ 22) |
 
