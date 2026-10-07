@@ -70,6 +70,17 @@ Le premier démarrage prend environ 30 secondes.
    - Value : la valeur de `WEBHOOK_API_KEY` dans `.env`.
 4. Créer une clé dans **Settings > n8n API** et la reporter dans `.env` (`N8N_API_KEY`). Elle sert aux scripts lancés depuis le terminal.
 
+### 4. Configurer Google Sheets
+
+Le projet utilise un **compte de service** Google : une identité technique, sans expiration, qui n'a accès qu'au classeur qu'on lui partage.
+
+1. Dans Google Cloud, créer un projet et activer **Google Sheets API** et **Google Drive API**.
+2. Créer un compte de service (sans rôle), puis une clé **JSON**. Ne jamais placer ce fichier dans le dépôt.
+3. Créer un classeur Google Sheets vide et le **partager** avec l'adresse du compte de service, en Éditeur.
+4. Reporter dans `.env` l'identifiant du classeur (`GOOGLE_SHEET_ID`, dans l'URL entre `/d/` et `/edit`) et l'adresse du compte de service (`GOOGLE_SERVICE_ACCOUNT_EMAIL`), puis `docker compose up -d`.
+5. Dans n8n, créer un credential **Google Service Account API** avec `client_email` et `private_key` de la clé JSON. Supprimer ensuite le fichier de clé.
+6. Importer `workflows/wf0-setup-google-sheets.json`, lui associer le credential, et l'exécuter **une fois** : il crée les onglets décrits dans `config/sheets.json` et charge la FAQ.
+
 ## Versionner les workflows
 
 Les workflows vivent dans la base de n8n. Pour les enregistrer dans le dépôt :
