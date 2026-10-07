@@ -786,7 +786,7 @@ ai-business-automation-n8n/
 │   ├── check_labels.py
 │   ├── export_workflows.sh
 │   ├── import_workflows.sh
-│   └── send_samples.sh
+│   └── send_email.py
 └── docs/
     ├── cdc.md
     ├── guide-utilisateur.md
