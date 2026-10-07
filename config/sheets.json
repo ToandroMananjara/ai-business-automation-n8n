@@ -4,52 +4,118 @@
       "title": "tickets",
       "description": "Une ligne par demande reçue par le WF1 (substitut des tickets d'un CRM)",
       "columns": [
-        "ticket_id", "message_id", "received_at", "processed_at", "related_ticket_id",
-        "customer_name", "company", "email", "phone",
-        "category", "priority", "requested_date", "secondary_requests", "summary",
-        "team", "due_at", "status", "review_reason",
-        "draft_response", "draft_faq_ids", "draft_unanswered", "draft_outcome",
-        "model", "execution_id"
+        "ticket_id",
+        "message_id",
+        "received_at",
+        "processed_at",
+        "related_ticket_id",
+        "customer_name",
+        "company",
+        "email",
+        "phone",
+        "category",
+        "priority",
+        "requested_date",
+        "secondary_requests",
+        "summary",
+        "ambiguous",
+        "team",
+        "due_at",
+        "status",
+        "review_reason",
+        "draft_response",
+        "draft_faq_ids",
+        "draft_unanswered",
+        "draft_outcome",
+        "model",
+        "execution_id",
+        "test_run"
       ]
     },
     {
       "title": "cv",
       "description": "Candidats extraits par le WF2",
       "columns": [
-        "processed_at", "ticket_id", "name", "email", "phone", "skills",
-        "experience_years", "education", "status", "review_reason", "model", "execution_id"
+        "processed_at",
+        "ticket_id",
+        "name",
+        "email",
+        "phone",
+        "skills",
+        "experience_years",
+        "education",
+        "status",
+        "review_reason",
+        "model",
+        "execution_id"
       ]
     },
     {
       "title": "invoices",
       "description": "Factures extraites par le WF2",
       "columns": [
-        "processed_at", "supplier", "invoice_number", "invoice_date", "due_date",
-        "amount_excl_tax", "tax_amount", "amount_incl_tax", "currency",
-        "status", "review_reason", "model", "execution_id"
+        "processed_at",
+        "supplier",
+        "invoice_number",
+        "invoice_date",
+        "due_date",
+        "amount_excl_tax",
+        "tax_amount",
+        "amount_incl_tax",
+        "currency",
+        "status",
+        "review_reason",
+        "model",
+        "execution_id"
       ]
     },
     {
       "title": "faq",
       "description": "Base de connaissances, chargée depuis data/faq.csv",
-      "columns": ["id", "category", "question", "answer", "source"]
+      "columns": [
+        "id",
+        "category",
+        "question",
+        "answer",
+        "source"
+      ]
     },
     {
       "title": "errors",
       "description": "Journal des pannes, alimenté par le WF3",
       "columns": [
-        "timestamp", "workflow", "execution_id", "node", "error_type",
-        "error_message", "input_ref", "status"
+        "timestamp",
+        "workflow",
+        "execution_id",
+        "node",
+        "error_type",
+        "error_message",
+        "input_ref",
+        "status"
       ]
     },
     {
       "title": "reports",
       "description": "Historique des rapports hebdomadaires du WF4",
       "columns": [
-        "generated_at", "period_start", "period_end", "received", "filtered",
-        "by_category", "by_priority", "by_team", "with_draft", "manual_review",
-        "overdue", "drafts_sent_as_is", "drafts_edited", "drafts_discarded",
-        "errors", "documents_processed", "documents_rejected", "time_saved_estimate"
+        "generated_at",
+        "period_start",
+        "period_end",
+        "received",
+        "filtered",
+        "by_category",
+        "by_priority",
+        "by_team",
+        "with_draft",
+        "manual_review",
+        "overdue",
+        "drafts_sent_as_is",
+        "drafts_edited",
+        "drafts_discarded",
+        "errors",
+        "documents_processed",
+        "documents_rejected",
+        "time_saved_estimate"
       ]
     }
   ]
