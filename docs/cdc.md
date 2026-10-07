@@ -6,7 +6,7 @@
 | **Dépôt** | `ai-business-automation-n8n` |
 | **Type** | Prototype de démonstration (MVP) |
 | **Auteur** | Toandromananjara Mahasalotra |
-| **Version** | 3.3 — 2026-10-07 |
+| **Version** | 3.4 — 2026-10-07 |
 
 Historique des versions :
 
@@ -18,6 +18,7 @@ Historique des versions :
 | 3.1 | Règles d'étiquetage sourcées : une intention principale par demande, demandes secondaires conservées, ambiguïté redéfinie, seuils de réussite fixés avant la mesure |
 | 3.2 | Modèles choisis après test comparatif ; calendrier dans le message envoyé au modèle ; filet de sécurité des 48 heures dans le code |
 | 3.3 | Prompt de brouillon : sortie avec citations de FAQ et points non couverts, contrôles automatiques ; passage en JSON simple (troncature silencieuse du mode strict) |
+| 3.4 | WF3 (gestion des erreurs) ; statut `ERROR` quand les deux LLM sont indisponibles ; alertes Slack |
 
 ---
 
@@ -409,7 +410,11 @@ L'agent indique ce qu'il a fait du brouillon dans `draft_outcome` : `SENT_AS_IS`
 
 ### 7.11 Notification
 
-Seules les demandes `URGENT` déclenchent une notification immédiate. Les autres attendent dans la file de leur équipe : notifier chaque email noierait les agents et ferait ignorer les alertes importantes.
+Une alerte est envoyée dans le canal Slack `#alertes` pour les demandes `URGENT` et pour les tickets `ERROR` (demande non qualifiée faute de LLM). Les autres demandes attendent dans la file de leur équipe : notifier chaque email noierait les agents et ferait ignorer les alertes importantes.
+
+L'alerte contient l'identifiant du ticket, l'équipe, le client et son téléphone, le résumé et l'échéance de réponse. Une panne de Slack n'empêche pas de répondre à l'appelant : le ticket est déjà écrit.
+
+**Les deux LLM indisponibles.** Si Groq puis Gemini échouent, le ticket est quand même créé, avec le statut `ERROR`, l'expéditeur et l'objet de l'email, et la raison de la panne. La demande n'est jamais perdue : elle reste dans la file, traitée à la main.
 
 ### 7.12 Statuts
 
@@ -418,7 +423,7 @@ stateDiagram-v2
     [*] --> FILTERED : réponse automatique, erreur de distribution
     [*] --> PENDING_REVIEW : cas standard, brouillon prêt
     [*] --> NEEDS_MANUAL_REVIEW : cas sensible, ambigu ou invalide
-    [*] --> ERROR : panne technique
+    [*] --> ERROR : les deux LLM indisponibles
     ERROR --> NEEDS_MANUAL_REVIEW : après analyse
     PENDING_REVIEW --> REPLIED : un agent a répondu
     NEEDS_MANUAL_REVIEW --> REPLIED : un agent a répondu
@@ -517,10 +522,14 @@ Workflow distinct déclenché par le node **Error Trigger** de n8n, configuré c
 flowchart LR
     A[Error Trigger] --> B[Formatage de l'erreur]
     B --> C[(Sheet errors)]
-    C --> D[Notification]
+    C --> D[Alerte Slack #alertes]
 ```
 
-Types d'erreurs couverts : timeout ou erreur des deux fournisseurs LLM, quota dépassé (429), erreur de l'API Google Sheets, document illisible.
+Le WF3 traite les pannes **imprévues** : requête mal formée, bug dans un node, Google Sheets inaccessible. La panne **prévue** des deux LLM est traitée dans le WF1 lui-même (statut `ERROR`, § 7.11).
+
+Il classe chaque panne par type (`QUOTA_LLM`, `LLM_INDISPONIBLE`, `GOOGLE_SHEETS`, `REQUETE_INVALIDE`, `AUTRE`), l'écrit dans l'onglet `errors`, puis l'annonce dans Slack. Si Google Sheets est lui-même en panne, l'écriture du journal échoue sans bloquer l'alerte Slack.
+
+Dans cette version de n8n, un workflow d'erreur doit être **publié** (activé) pour pouvoir être désigné par un autre workflow.
 
 Les appels aux API externes utilisent **Retry On Fail** (3 essais, délai croissant) avant de déclencher la bascule ou WF3.
 
@@ -812,6 +821,7 @@ ai-business-automation-n8n/
 | Modèle principal | **Groq `qwen/qwen3.8-27b`** | Aucune erreur sur le test comparatif, le plus rapide (0,8 s), aucun token de raisonnement (`eval/model-selection.md`) |
 | Modèle de secours | **Google `gemini-3.1-flash-lite`** | Aussi précis, plus lent ; autre fournisseur que le principal |
 | Bascule entre fournisseurs | **Dans n8n**, par la sortie d'erreur du node principal | Visible et testable |
+| Canal d'alerte | **Slack** (espace gratuit, bot avec le seul droit `chat:write`) | Courant en entreprise, sans OAuth ni expiration. Google Chat écarté : ses webhooks sont réservés aux comptes Google Workspace payants. En production : le canal de l'équipe (Slack, Teams, Google Chat), seul le dernier node change. |
 | Entrée des emails | **Webhook** ; Gmail en V2 | Mécanisme réel d'intégration avec un CRM ou un ticketing ; tests rejouables |
 | Lieu du tri | **Registre `tickets`**, substitut d'un CRM ; pas de libellés Gmail | Un centre d'appel trie dans son outil de travail, pas dans la boîte mail |
 | Routage | **Table fixe catégorie → équipe**, dans le code | Décision explicable et testable, sans dépendre du LLM |
@@ -842,7 +852,6 @@ Une dépendance qu'on ne peut pas déboguer va contre l'objectif d'automatisatio
 
 | Décision | Options | Impact |
 |---|---|---|
-| Canal de notification | Email, Slack, Telegram | Simplicité de configuration |
 | Date limite de candidature | À fixer | Découpage du planning (§ 22) |
 
 ---
