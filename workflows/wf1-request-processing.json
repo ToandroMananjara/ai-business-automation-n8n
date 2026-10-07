@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T19:21:27.330Z",
+  "updatedAt": "2026-10-07T20:29:38.201Z",
   "createdAt": "2026-10-07T19:17:46.680Z",
   "id": "BMkRNgzkAE6NNaEx",
   "name": "WF1 — Traitement des demandes",
@@ -181,6 +181,7 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
       "position": [
         1780,
         620
@@ -223,7 +224,7 @@
         460
       ],
       "parameters": {
-        "jsCode": "// Lit la réponse du modèle (Groq ou Gemini) et vérifie qu'elle respecte le format attendu.\n// Le LLM extrait ; ici, le code contrôle.\nconst rules = $('Charger la configuration').first().json.rules;\nconst prepared = $('Préparer la classification').first().json;   // dernier passage\nconst email = $('Filtrer').first().json;\nconst response = $json;\nconst content = response.choices?.[0]?.message?.content || '';\n\nconst REQUIRED = ['category', 'priority', 'customer_name', 'company', 'email', 'phone',\n                  'requested_date', 'secondary_requests', 'summary', 'ambiguous'];\nlet q = null;\nlet error = '';\ntry {\n  q = JSON.parse(content.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, ''));\n} catch (e) {\n  error = `JSON invalide (${e.message})`;\n}\nif (q) {\n  const missing = REQUIRED.filter(key => !(key in q));\n  if (missing.length) error = `champs manquants : ${missing.join(', ')}`;\n  else if (!rules.categories.includes(q.category)) error = `catégorie non autorisée : ${q.category}`;\n  else if (!rules.priorities.includes(q.priority)) error = `priorité non autorisée : ${q.priority}`;\n  else if (!Array.isArray(q.secondary_requests)) error = 'secondary_requests doit être une liste';\n  else if (typeof q.summary !== 'string' || !q.summary.trim()) error = 'résumé vide';\n  else if (q.email && !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(q.email)) error = `email invalide : ${q.email}`;\n  else if (q.requested_date) {\n    const requested = DateTime.fromISO(q.requested_date);\n    const received = DateTime.fromISO(email.received_at, { setZone: true });\n    if (!requested.isValid) error = `date invalide : ${q.requested_date}`;\n    else if (requested < received.startOf('day')) error = `date passée : ${q.requested_date}`;\n  }\n}\n\nreturn [{ json: {\n  valid: !error,\n  retry_error: error,\n  attempt: prepared.attempt,\n  model: response.model || '',\n  qualification: error ? null : q,\n  usage: response.usage || {},\n} }];\n"
+        "jsCode": "// Lit la réponse du modèle (Groq ou Gemini) et vérifie qu'elle respecte le format attendu.\n// Le LLM extrait ; ici, le code contrôle.\nconst rules = $('Charger la configuration').first().json.rules;\nconst prepared = $('Préparer la classification').first().json;   // dernier passage\nconst email = $('Filtrer').first().json;\nconst response = $json;\nconst content = response.choices?.[0]?.message?.content || '';\n\nconst REQUIRED = ['category', 'priority', 'customer_name', 'company', 'email', 'phone',\n                  'requested_date', 'secondary_requests', 'summary', 'ambiguous'];\nlet q = null;\nlet error = '';\n// Item venu de la sortie d'erreur du secours : Groq et Gemini sont tous deux en panne.\nconst providerDown = Boolean(response.error);\nif (providerDown) {\n  // Le message d'erreur brut des API contient souvent du JSON : on n'en garde que la phrase utile.\n  const raw = String(response.error.description || response.error.message || '');\n  const short = (raw.match(/\\\\?\"message\\\\?\":\\s*\\\\?\"([^\"\\\\]+)/) || [])[1] || raw;\n  error = `LLM indisponible (Groq et Gemini) : ${short.slice(0, 200)}`;\n} else {\n  try {\n    q = JSON.parse(content.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, ''));\n  } catch (e) {\n    error = `JSON invalide (${e.message})`;\n  }\n}\nif (q) {\n  const missing = REQUIRED.filter(key => !(key in q));\n  if (missing.length) error = `champs manquants : ${missing.join(', ')}`;\n  else if (!rules.categories.includes(q.category)) error = `catégorie non autorisée : ${q.category}`;\n  else if (!rules.priorities.includes(q.priority)) error = `priorité non autorisée : ${q.priority}`;\n  else if (!Array.isArray(q.secondary_requests)) error = 'secondary_requests doit être une liste';\n  else if (typeof q.summary !== 'string' || !q.summary.trim()) error = 'résumé vide';\n  else if (q.email && !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(q.email)) error = `email invalide : ${q.email}`;\n  else if (q.requested_date) {\n    const requested = DateTime.fromISO(q.requested_date);\n    const received = DateTime.fromISO(email.received_at, { setZone: true });\n    if (!requested.isValid) error = `date invalide : ${q.requested_date}`;\n    else if (requested < received.startOf('day')) error = `date passée : ${q.requested_date}`;\n  }\n}\n\nreturn [{ json: {\n  valid: !error,\n  provider_down: providerDown,\n  retry_error: error,\n  attempt: prepared.attempt,\n  model: response.model || '',\n  qualification: error ? null : q,\n  usage: response.usage || {},\n} }];\n"
       }
     },
     {
@@ -261,6 +262,16 @@
               "operator": {
                 "type": "number",
                 "operation": "lt"
+              }
+            },
+            {
+              "id": "0dc32626-2967-5503-9167-339c402baaba",
+              "leftValue": "={{ $json.provider_down }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
               }
             }
           ],
@@ -313,7 +324,7 @@
         560
       ],
       "parameters": {
-        "jsCode": "// Toutes les décisions sont prises ici, par des règles écrites (config/business_rules.json) :\n// rattachement, priorité, revue humaine, équipe, échéance de réponse.\nconst rules = $('Charger la configuration').first().json.rules;\nconst email = $('Filtrer').first().json;\nconst result = $('Lire la qualification').first().json;   // dernier passage, après relance éventuelle\nconst received = DateTime.fromISO(email.received_at, { setZone: true });\nconst reasons = [];\n\nlet q = result.qualification;\nif (!result.valid) {\n  reasons.push(`Sortie du modèle inexploitable après ${result.attempt} essai(s) : ${result.retry_error}`);\n  q = { category: 'AUTRE', priority: 'NORMAL', customer_name: null, company: null, email: null, phone: null,\n        requested_date: null, secondary_requests: [], summary: '', ambiguous: false };\n}\n\nconst ORDER = rules.priorities;   // du plus urgent au moins urgent\nconst raise = (current, minimum) => (ORDER.indexOf(current) > ORDER.indexOf(minimum) ? minimum : current);\nlet priority = q.priority;\n\n// 1. Rattachement : un ticket encore ouvert du même client (même email ou même téléphone)\nconst digits = value => String(value || '').replace(/\\D/g, '');\nconst since = received.minus({ days: rules.linking.window_days });\nconst related = $input.all()\n  .map(item => item.json)\n  .filter(t => t.ticket_id && !rules.linking.closed_statuses.includes(t.status))\n  .filter(t => String(t.test_run || '') === email.test_run)      // les tests ne se mélangent pas\n  .filter(t => DateTime.fromISO(String(t.received_at), { setZone: true }) >= since)\n  .filter(t => (q.email && t.email && String(t.email).toLowerCase() === q.email.toLowerCase())\n            || (q.phone && digits(t.phone) && digits(t.phone) === digits(q.phone)))\n  .sort((a, b) => (String(a.received_at) < String(b.received_at) ? 1 : -1))[0];\nif (related) priority = raise(priority, 'HIGH');                 // un client qui relance\n\n// 2. Échéance proche : filet de sécurité sur le calcul de dates du modèle\nconst escalation = rules.deadline_escalation;\nif (q.requested_date) {\n  const requested = DateTime.fromISO(q.requested_date, { zone: received.zone });\n  if (requested.diff(received, 'hours').hours < escalation.within_hours) {\n    priority = raise(priority, escalation.min_priority);\n  }\n}\n\n// 3. Revue humaine obligatoire\nconst review = rules.manual_review;\nif (result.valid && review.categories.includes(q.category)) {\n  reasons.push(q.category === 'RECLAMATION' ? 'Réclamation : réponse à rédiger par un humain' : 'Demande non reconnue');\n}\nif (review.priorities.includes(priority)) reasons.push('Urgence : traitement immédiat par un humain');\nif (review.if_ambiguous && q.ambiguous) reasons.push('Intention principale impossible à déterminer');\nif (review.if_no_contact && !q.email && !q.phone) reasons.push('Aucun moyen de recontacter le client');\n\n// 4. Routage et échéance de réponse\nreturn [{ json: {\n  qualification: { ...q, priority },\n  team: rules.team_by_category[q.category],\n  due_at: received.plus({ hours: rules.response_delay_hours[priority] }).toISO(),\n  related_ticket_id: related ? related.ticket_id : '',\n  status: reasons.length ? 'NEEDS_MANUAL_REVIEW' : 'PENDING_REVIEW',\n  review_reason: reasons.join(' ; '),\n  model: result.model,\n} }];\n"
+        "jsCode": "// Toutes les décisions sont prises ici, par des règles écrites (config/business_rules.json) :\n// rattachement, priorité, revue humaine, équipe, échéance de réponse.\nconst rules = $('Charger la configuration').first().json.rules;\nconst email = $('Filtrer').first().json;\nconst result = $('Lire la qualification').first().json;   // dernier passage, après relance éventuelle\nconst received = DateTime.fromISO(email.received_at, { setZone: true });\nconst reasons = [];\n\nlet q = result.qualification;\nif (result.provider_down) {\n  reasons.push(result.retry_error);   // la demande est gardée, statut ERROR, traitée à la main\n} else if (!result.valid) {\n  reasons.push(`Sortie du modèle inexploitable après ${result.attempt} essai(s) : ${result.retry_error}`);\n}\nif (!result.valid) {\n  // Pas de qualification : on garde au moins l'expéditeur et l'objet pour que l'agent sache qui a écrit.\n  q = { category: 'AUTRE', priority: 'NORMAL', customer_name: null, company: null, email: email.sender, phone: null,\n        requested_date: null, secondary_requests: [], summary: `Non qualifié. Objet : ${email.subject}`, ambiguous: false };\n}\n\nconst ORDER = rules.priorities;   // du plus urgent au moins urgent\nconst raise = (current, minimum) => (ORDER.indexOf(current) > ORDER.indexOf(minimum) ? minimum : current);\nlet priority = q.priority;\n\n// 1. Rattachement : un ticket encore ouvert du même client (même email ou même téléphone)\nconst digits = value => String(value || '').replace(/\\D/g, '');\nconst since = received.minus({ days: rules.linking.window_days });\nconst related = $input.all()\n  .map(item => item.json)\n  .filter(t => t.ticket_id && !rules.linking.closed_statuses.includes(t.status))\n  .filter(t => String(t.test_run || '') === email.test_run)      // les tests ne se mélangent pas\n  .filter(t => DateTime.fromISO(String(t.received_at), { setZone: true }) >= since)\n  .filter(t => (q.email && t.email && String(t.email).toLowerCase() === q.email.toLowerCase())\n            || (q.phone && digits(t.phone) && digits(t.phone) === digits(q.phone)))\n  .sort((a, b) => (String(a.received_at) < String(b.received_at) ? 1 : -1))[0];\nif (related) priority = raise(priority, 'HIGH');                 // un client qui relance\n\n// 2. Échéance proche : filet de sécurité sur le calcul de dates du modèle\nconst escalation = rules.deadline_escalation;\nif (q.requested_date) {\n  const requested = DateTime.fromISO(q.requested_date, { zone: received.zone });\n  if (requested.diff(received, 'hours').hours < escalation.within_hours) {\n    priority = raise(priority, escalation.min_priority);\n  }\n}\n\n// 3. Revue humaine obligatoire (seulement si la qualification est valide : sinon la raison est déjà connue)\nconst review = rules.manual_review;\nif (result.valid) {\n  if (review.categories.includes(q.category)) {\n    reasons.push(q.category === 'RECLAMATION' ? 'Réclamation : réponse à rédiger par un humain' : 'Demande non reconnue');\n  }\n  if (review.priorities.includes(priority)) reasons.push('Urgence : traitement immédiat par un humain');\n  if (review.if_ambiguous && q.ambiguous) reasons.push('Intention principale impossible à déterminer');\n  if (review.if_no_contact && !q.email && !q.phone) reasons.push('Aucun moyen de recontacter le client');\n}\n\n// 4. Routage et échéance de réponse\nreturn [{ json: {\n  qualification: { ...q, priority },\n  team: rules.team_by_category[q.category],\n  due_at: received.plus({ hours: rules.response_delay_hours[priority] }).toISO(),\n  related_ticket_id: related ? related.ticket_id : '',\n  status: result.provider_down ? 'ERROR' : reasons.length ? 'NEEDS_MANUAL_REVIEW' : 'PENDING_REVIEW',\n  review_reason: reasons.join(' ; '),\n  model: result.model,\n} }];\n"
       }
     },
     {
@@ -444,6 +455,7 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
       "position": [
         3800,
         620
@@ -486,7 +498,7 @@
         460
       ],
       "parameters": {
-        "jsCode": "// Trois contrôles déterministes, avant de proposer le brouillon à un agent :\n// citations de FAQ existantes, aucun nombre inventé, signature présente.\nconst prepared = $('Préparer le brouillon').first().json;\nconst q = $('Appliquer les règles métier').first().json.qualification;\nconst email = $('Filtrer').first().json;\nconst content = $json.choices?.[0]?.message?.content || '';\n\nlet draft = null;\nlet problem = '';\ntry {\n  draft = JSON.parse(content.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, ''));\n} catch (e) {\n  problem = 'brouillon illisible (JSON invalide)';\n}\nif (draft && (typeof draft.draft !== 'string' || !draft.draft.trim())) problem = 'brouillon vide';\n\nconst checks = [];\nif (draft && !problem) {\n  const cited = Array.isArray(draft.faq_ids_used) ? draft.faq_ids_used : [];\n  const provided = new Set(prepared.entries.map(e => e.id));\n  const invalid = cited.filter(id => !provided.has(id));\n  if (invalid.length) checks.push(`citations inexistantes : ${invalid.join(', ')}`);\n\n  // Chaque nombre du brouillon doit exister dans l'email, la qualification ou les entrées citées.\n  const used = prepared.entries.filter(e => cited.includes(e.id));\n  const sources = [email.subject, email.body_text, JSON.stringify(q), ...used.map(e => `${e.question} ${e.answer}`)].join(' ');\n  const known = new Set(sources.match(/\\d+/g) || []);\n  const unsupported = [...new Set(draft.draft.match(/\\d+/g) || [])].filter(n => !known.has(n));\n  if (unsupported.length) checks.push(`nombres non sourcés : ${unsupported.join(', ')}`);\n\n  if (!/(Le service client|Customer Service)\\s*$/.test(draft.draft.trim())) {\n    checks.push('signature absente (texte peut-être tronqué)');\n  }\n}\n\nreturn [{ json: {\n  draft_response: draft?.draft || '',\n  draft_faq_ids: (draft?.faq_ids_used || []).join(', '),\n  draft_unanswered: (draft?.unanswered || []).join(' | '),\n  draft_model: $json.model || '',\n  draft_check: problem || checks.join(' ; '),\n} }];\n"
+        "jsCode": "// Trois contrôles déterministes, avant de proposer le brouillon à un agent :\n// citations de FAQ existantes, aucun nombre inventé, signature présente.\nconst prepared = $('Préparer le brouillon').first().json;\nconst q = $('Appliquer les règles métier').first().json.qualification;\nconst email = $('Filtrer').first().json;\nconst content = $json.choices?.[0]?.message?.content || '';\n\nlet draft = null;\nlet problem = '';\nif ($json.error) {\n  const raw = String($json.error.description || $json.error.message || '');\n  const short = (raw.match(/\\\\?\"message\\\\?\":\\s*\\\\?\"([^\"\\\\]+)/) || [])[1] || raw;\n  problem = `LLM indisponible pour le brouillon (Groq et Gemini) : ${short.slice(0, 200)}`;\n} else {\n  try {\n    draft = JSON.parse(content.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, ''));\n  } catch (e) {\n    problem = 'brouillon illisible (JSON invalide)';\n  }\n}\nif (draft && (typeof draft.draft !== 'string' || !draft.draft.trim())) problem = 'brouillon vide';\n\nconst checks = [];\nif (draft && !problem) {\n  const cited = Array.isArray(draft.faq_ids_used) ? draft.faq_ids_used : [];\n  const provided = new Set(prepared.entries.map(e => e.id));\n  const invalid = cited.filter(id => !provided.has(id));\n  if (invalid.length) checks.push(`citations inexistantes : ${invalid.join(', ')}`);\n\n  // Chaque nombre du brouillon doit exister dans l'email, la qualification ou les entrées citées.\n  const used = prepared.entries.filter(e => cited.includes(e.id));\n  const sources = [email.subject, email.body_text, JSON.stringify(q), ...used.map(e => `${e.question} ${e.answer}`)].join(' ');\n  const known = new Set(sources.match(/\\d+/g) || []);\n  const unsupported = [...new Set(draft.draft.match(/\\d+/g) || [])].filter(n => !known.has(n));\n  if (unsupported.length) checks.push(`nombres non sourcés : ${unsupported.join(', ')}`);\n\n  if (!/(Le service client|Customer Service)\\s*$/.test(draft.draft.trim())) {\n    checks.push('signature absente (texte peut-être tronqué)');\n  }\n}\n\nreturn [{ json: {\n  draft_response: draft?.draft || '',\n  draft_faq_ids: (draft?.faq_ids_used || []).join(', '),\n  draft_unanswered: (draft?.unanswered || []).join(' | '),\n  draft_model: $json.model || '',\n  draft_check: problem || checks.join(' ; '),\n} }];\n"
       }
     },
     {
@@ -543,12 +555,88 @@
       }
     },
     {
+      "id": "435e1301-3c67-5525-9cd3-f1c0f2e3c630",
+      "name": "Prévenir l'équipe ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4700,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "08036a87-cc12-5d4d-94aa-e18425e8629d",
+              "leftValue": "={{ $('Composer le ticket').first().json.priority || '' }}",
+              "rightValue": "URGENT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "05756119-aa31-5a69-bf27-5b491b2e2506",
+              "leftValue": "={{ $('Composer le ticket').first().json.status }}",
+              "rightValue": "ERROR",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "74051694-1888-5f0c-a28f-fe031caf3a6e",
+      "name": "Prévenir sur Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "onError": "continueRegularOutput",
+      "position": [
+        4920,
+        200
+      ],
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#alertes"
+        },
+        "messageType": "text",
+        "text": "={{ (() => { const t = $('Composer le ticket').first().json; const head = t.status === 'ERROR' ? '*Demande non qualifiée : LLM indisponible*' : '*Demande urgente*'; return [head, `Ticket : ${t.ticket_id} (équipe ${t.team})`, `Client : ${t.customer_name || 'inconnu'} ${t.phone ? '- ' + t.phone : ''} ${t.email ? '- ' + t.email : ''}`, `Résumé : ${t.summary}`, `Échéance de réponse : ${t.due_at}`].join('\\n'); })() }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "TwV4oQFIGLHeLs9f",
+          "name": "Slack account"
+        }
+      },
+      "webhookId": "6808d41f-9b91-48a4-b265-e766d90b78b2"
+    },
+    {
       "id": "575f6522-9cf1-52fd-9a44-3cac3e5ea765",
       "name": "Répondre",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        4700,
+        5140,
         300
       ],
       "parameters": {
@@ -663,6 +751,13 @@
     },
     "Classifier (Gemini, secours)": {
       "main": [
+        [
+          {
+            "node": "Lire la qualification",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Lire la qualification",
@@ -789,6 +884,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Contrôler le brouillon",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -818,6 +920,35 @@
       "main": [
         [
           {
+            "node": "Prévenir l'équipe ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prévenir l'équipe ?": {
+      "main": [
+        [
+          {
+            "node": "Prévenir sur Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Répondre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prévenir sur Slack": {
+      "main": [
+        [
+          {
             "node": "Répondre",
             "type": "main",
             "index": 0
@@ -827,15 +958,16 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "errorWorkflow": "dTir5YmlNp369L4p"
   },
   "staticData": null,
   "meta": null,
   "nodeGroups": [],
   "pinData": null,
-  "versionId": "fc46f100-f5c2-44e3-a3f2-9f6d26f9cc1f",
-  "activeVersionId": "fc46f100-f5c2-44e3-a3f2-9f6d26f9cc1f",
-  "versionCounter": 2,
+  "versionId": "1a255eb6-bdc6-4ecd-af9c-547b66eb9dba",
+  "activeVersionId": "1a255eb6-bdc6-4ecd-af9c-547b66eb9dba",
+  "versionCounter": 5,
   "triggerCount": 1,
   "sourceWorkflowId": null,
   "tags": [],
