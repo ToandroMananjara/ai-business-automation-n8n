@@ -49,12 +49,13 @@
   "filtering": {
     "subject_prefixes": [
       "réponse automatique",
-      "absence",
-      "absent",
+      "absence du bureau",
+      "absent du bureau",
       "out of office",
       "automatic reply",
       "undeliverable",
-      "delivery status notification"
+      "delivery status notification",
+      "non remis"
     ],
     "sender_local_parts": [
       "mailer-daemon",
