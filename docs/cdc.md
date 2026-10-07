@@ -195,7 +195,7 @@ Toutes les données sont **fictives** et versionnées dans `data/`. Les règles 
 | Étiquettes attendues | 30 | Vérité terrain pour l'évaluation, saisie à la main |
 | CV | 5 | WF2, dont 1 reçu en pièce jointe d'une candidature |
 | Factures | 5 | WF2, dont 1 avec une erreur de total |
-| FAQ | 20 à 30 entrées | Base de connaissances |
+| FAQ | 25 entrées, dont 6 informations réelles sourcées | Base de connaissances |
 
 Répartition visée des 30 emails : environ 18 cas standards traités sans revue obligatoire, et 12 cas difficiles ou sensibles. Toutes les catégories et toutes les priorités sont représentées, ainsi que 2 ou 3 emails à filtrer (réponse automatique, erreur de distribution).
 
@@ -260,8 +260,10 @@ Requête `POST` sur le webhook, protégée par l'en-tête `X-Api-Key` :
 
 Un email est écarté, avec le statut `FILTERED` et la raison dans `review_reason`, s'il s'agit (listes dans `config/business_rules.json`, clé `filtering`) :
 
-- d'une **réponse automatique** : objet commençant par « Réponse automatique », « Absence », « Absent », « Out of office », « Automatic reply » ;
-- d'une **erreur de distribution** : expéditeur `mailer-daemon` ou `postmaster`, objet « Undeliverable » ou « Delivery Status Notification ».
+- d'une **réponse automatique** : objet commençant par « Réponse automatique », « Absence du bureau », « Absent du bureau », « Out of office », « Automatic reply » ;
+- d'une **erreur de distribution** : expéditeur `mailer-daemon` ou `postmaster`, objet commençant par « Undeliverable », « Delivery Status Notification » ou « Non remis ».
+
+Les préfixes sont précis à dessein : « Absence » seul filtrerait à tort « Absence de chauffage chez ma mère », un cas urgent présent dans le jeu de test. Le script `check_labels.py` applique la règle de filtrage à chaque email de test et la compare aux étiquettes.
 
 Pourquoi avant le LLM : ces messages ne demandent aucune action, et chaque appel évité économise le quota du fournisseur. Un expéditeur `no-reply` n'est **pas** filtré à lui seul : un formulaire de contact du site envoie de vraies demandes depuis une adresse `no-reply`.
 
@@ -366,7 +368,7 @@ Dans le MVP, les délais sont comptés en heures calendaires. Le calcul en heure
 
 ### 7.10 Brouillon de réponse
 
-Un second appel LLM rédige un brouillon **uniquement à partir des entrées de la FAQ** de la même catégorie. Le brouillon répond aussi aux demandes de `secondary_requests`, à partir des entrées de la FAQ qui les concernent. Si la FAQ ne couvre pas la question, le brouillon le dit et propose un rappel par un conseiller, au lieu d'inventer une réponse.
+Un second appel LLM rédige un brouillon **uniquement à partir des entrées de la FAQ** injectées : celles de la catégorie principale, plus toujours les entrées `INFORMATION` (questions générales). Le brouillon répond aussi aux demandes de `secondary_requests` quand ces entrées le permettent. Si la FAQ ne couvre pas la question, le brouillon le dit et propose un rappel par un conseiller, au lieu d'inventer une réponse.
 
 **Aucune réponse rédigée par le LLM n'est envoyée automatiquement.** L'accusé de réception à modèle fixe (V2) est la seule communication automatique envisagée : il ne contient aucun texte généré.
 
@@ -499,7 +501,9 @@ Principe : une panne ne fait jamais perdre une demande. Elle est journalisée, n
 
 La base de connaissances est une **FAQ de 20 à 30 entrées** dans l'onglet `faq` : horaires du service, délais d'intervention, zone couverte, modalités d'annulation, suivi d'un dossier, devis, garanties, recrutement.
 
-Seules les entrées de la catégorie concernée sont injectées dans le prompt du brouillon : le contexte reste court, ce qui économise le quota de tokens.
+Seules les entrées de la catégorie principale et les entrées générales (`INFORMATION`) sont injectées dans le prompt du brouillon : le contexte reste court, ce qui économise le quota de tokens, tout en couvrant les questions secondaires les plus courantes (horaires, zone, frais).
+
+La FAQ distingue la **politique du centre**, fictive, et les **informations réelles** (urgence gaz, dégât des eaux, garanties légales, entretien des chaudières, RGE), chacune avec sa source.
 
 **Choix assumé :** pas de base vectorielle dans le MVP. Avec quelques dizaines d'entrées, tout le contenu tient dans le contexte du modèle. Un RAG avec embeddings ajouterait de l'infrastructure sans gain mesurable. Il deviendra pertinent quand la base dépassera ce que le contexte peut contenir, ou avec des documents longs non structurés (V2).
 

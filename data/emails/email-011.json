@@ -1,0 +1,13 @@
+{
+  "message_id": "msg-011",
+  "received_at": "2026-10-05T18:30:00+02:00",
+  "sender": "lucas.martin@example.com",
+  "subject": "Candidature au poste de téléconseiller",
+  "body": "Madame, Monsieur,\n\nJe souhaite proposer ma candidature au poste de téléconseiller publié sur votre site. Vous trouverez mon CV en pièce jointe.\n\nJ'ai deux ans d'expérience en relation client par téléphone, dont un an dans la prise de rendez-vous.\n\nCordialement,\nLucas Martin\n06 39 98 64 20",
+  "attachments": [
+    {
+      "filename": "cv-lucas-martin.pdf",
+      "path": "cv/cv-lucas-martin.pdf"
+    }
+  ]
+}

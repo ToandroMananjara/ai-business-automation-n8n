@@ -1,0 +1,7 @@
+{
+  "message_id": "msg-028",
+  "received_at": "2026-10-06T15:15:00+02:00",
+  "sender": "t.mercier@example.org",
+  "subject": "Devis signé",
+  "body": "Bonjour,\n\nJ'ai renvoyé vendredi le devis signé pour la rénovation de la salle de bain. Pouvez-vous me confirmer que vous l'avez bien reçu ? Et savez-vous quand les travaux pourront commencer ?\n\nThomas Mercier\n06 39 98 03 81"
+}

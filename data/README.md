@@ -1,6 +1,6 @@
 # Données de démonstration
 
-Toutes les données de ce dossier sont **fictives**. Les noms, adresses, numéros de téléphone et entreprises sont inventés. Les adresses email utilisent les domaines réservés `example.com`, `example.fr` et `example.org`.
+Toutes les données de ce dossier sont **fictives**. Les noms, adresses, numéros de téléphone et entreprises sont inventés. Les adresses email utilisent des domaines `example.*`. Les numéros de téléphone sont pris dans des plages (`06 39 98`, `04 65 71`) couramment citées comme réservées aux œuvres de fiction, pour limiter le risque de tomber sur un vrai numéro.
 
 ## Contexte
 
@@ -60,8 +60,10 @@ Les étapes 1 à 3 sont ce que le système doit **reconnaître**. L'étape 4 en 
 
 Un email est filtré, donc **non traité**, s'il s'agit :
 
-- d'une réponse automatique : objet commençant par « Réponse automatique », « Absence », « Absent », « Out of office », « Automatic reply » ;
-- d'une erreur de distribution : expéditeur `mailer-daemon` ou `postmaster`, objet « Undeliverable » ou « Delivery Status Notification ».
+- d'une réponse automatique : objet commençant par « Réponse automatique », « Absence du bureau », « Absent du bureau », « Out of office », « Automatic reply » ;
+- d'une erreur de distribution : expéditeur `mailer-daemon` ou `postmaster`, objet commençant par « Undeliverable », « Delivery Status Notification » ou « Non remis ».
+
+Les préfixes sont volontairement précis. Un préfixe trop court comme « Absence » filtrerait à tort un vrai message intitulé « Absence de chauffage chez ma mère » (email 009 du jeu de test).
 
 Un expéditeur `no-reply` n'est **pas** filtré à lui seul : un formulaire de contact envoie de vraies demandes depuis une adresse `no-reply`. Une publicité n'est pas filtrée par règle : elle est classée `AUTRE`.
 
@@ -75,10 +77,10 @@ Pour un email filtré, `expected` vaut `null`.
 |---|---|
 | `RENDEZ_VOUS` | Demande d'intervention, de visite ou de devis nécessitant un passage de l'artisan, ou demande de déplacement d'un rendez-vous |
 | `SUIVI` | Question sur une intervention, un devis ou un dossier **déjà en cours** |
-| `INFORMATION` | Question générale sans dossier en cours : horaires, zone couverte, tarifs, garanties |
+| `INFORMATION` | Question générale sans dossier en cours (horaires, zone couverte, tarifs, garanties), ou information transmise sans demande d'action (remerciement, avis) |
 | `RECLAMATION` | Mécontentement : retard, travail mal fait, facture contestée, comportement |
 | `CANDIDATURE` | Candidature spontanée ou réponse à une offre d'emploi du centre d'appel |
-| `AUTRE` | Publicité, démarchage, message hors sujet ou incompréhensible |
+| `AUTRE` | Publicité, démarchage, message hors sujet, ou message dont l'intention ne peut pas être déterminée (avec `ambiguous: true`) |
 
 Une demande de devis est classée `RENDEZ_VOUS` : pour des travaux, le devis s'établit après une **visite technique** de l'artisan, qu'il faut planifier.
 
@@ -110,7 +112,9 @@ La catégorie et la priorité dépendent de **ce que demande** la personne, pas 
 | `URGENT` | Risque pour la sécurité ou dégât en cours : fuite active, odeur de gaz, panne électrique totale, absence de chauffage avec une personne vulnérable |
 | `HIGH` | Échéance de moins de 48 heures après `received_at`, ou client qui relance (« je vous ai déjà écrit », « toujours sans nouvelles ») |
 | `NORMAL` | Cas par défaut |
-| `LOW` | Aucune action attendue ni échéance : remerciement, publicité, simple information sans enjeu |
+| `LOW` | Aucune réponse ni action attendue : remerciement, publicité |
+
+Une question qui attend une réponse est au moins `NORMAL`.
 
 La priorité ne dépend pas du ton du message : une réclamation polie peut être `NORMAL`, une demande de rendez-vous peut être `URGENT`.
 
@@ -120,14 +124,14 @@ Ces niveaux suivent la logique de la **matrice impact × urgence** utilisée par
 
 | Champ | Règle |
 |---|---|
-| `customer_name` | Nom de la personne qui écrit, tel qu'il apparaît. `null` s'il n'est pas donné. |
+| `customer_name` | Nom de la personne qui écrit, tel qu'il apparaît (même si elle écrit pour un proche). `null` s'il n'est pas donné. |
 | `company` | Entreprise de la personne qui écrit (par exemple un artisan qui écrit lui-même). `null` pour un particulier. L'artisan **concerné** par la demande n'est pas l'entreprise de l'expéditeur. |
 | `email` | Adresse à laquelle on peut répondre : celle du corps du message si elle y figure, sinon l'expéditeur. `null` si l'expéditeur est une adresse automatique (`no-reply`, `ne-pas-repondre`) et qu'aucune adresse ne figure dans le corps. |
 | `phone` | Numéro tel qu'écrit dans le message. `null` s'il n'est pas donné. |
 | `requested_date` | Date d'une intervention **à venir**, souhaitée ou déjà prévue, au format `AAAA-MM-JJ`, **seulement si elle est déterminable**, y compris de façon relative (« demain », « vendredi », avec `received_at`). `null` pour une indication vague (« la semaine prochaine », « dès que possible ») et pour une date passée. |
 | `summary` | Une phrase factuelle, sans information absente du message. Non évaluée automatiquement. |
-| `secondary_requests` | Liste des demandes **autres que l'intention principale**, une phrase par demande. Liste vide `[]` s'il n'y a qu'une demande. L'évaluation compare le **nombre** de demandes secondaires, pas leur formulation. |
-| `ambiguous` | `true` seulement si **l'intention principale ne peut pas être déterminée** : message incompréhensible, contradictoire, ou trop vague pour savoir ce que veut la personne. Plusieurs demandes claires ne rendent **pas** un message ambigu. |
+| `secondary_requests` | Liste des demandes **autres que la demande principale**, une phrase par demande. Une demande est une question ou une action attendue distincte, même si elle relève de la même catégorie (« Avez-vous reçu mon devis ? Quand commencent les travaux ? » = une demande principale et une secondaire). Liste vide `[]` s'il n'y a qu'une demande. L'évaluation compare le **nombre** de demandes secondaires, pas leur formulation. |
+| `ambiguous` | `true` seulement si **l'intention principale ne peut pas être déterminée** : message incompréhensible, contradictoire, ou trop vague pour savoir ce que veut la personne. La catégorie est alors `AUTRE`. Plusieurs demandes claires ne rendent **pas** un message ambigu. |
 
 **Règle d'or : ne jamais inventer.** Une information absente du message vaut `null`, même si elle semble évidente.
 
@@ -166,7 +170,7 @@ Pour un email filtré, `expected_manual_review` vaut `false` et `expected_team` 
     "customer_name": "Marie Lefèvre",
     "company": null,
     "email": "marie.lefevre@example.fr",
-    "phone": "06 12 34 56 78",
+    "phone": "06 39 98 12 34",
     "requested_date": null,
     "secondary_requests": [],
     "ambiguous": false
@@ -177,6 +181,19 @@ Pour un email filtré, `expected_manual_review` vaut `false` et `expected_team` 
   "trap": "Description du piège testé, ou null"
 }
 ```
+
+## La FAQ (`faq.csv`)
+
+| Colonne | Contenu |
+|---|---|
+| `id` | Identifiant (`faq-01`...) |
+| `category` | Catégorie de demande à laquelle l'entrée répond |
+| `question`, `answer` | La question type et la réponse validée |
+| `source` | `fictif` pour la politique du centre d'appel (inventée pour le scénario), ou la référence d'une **information réelle** (sécurité gaz, dégât des eaux, garanties légales, entretien des chaudières, RGE) |
+
+Les entrées fictives décrivent un centre d'appel imaginaire : horaires, délais, frais. Les entrées réelles sont sourcées et ne doivent pas être modifiées sans vérifier la source.
+
+**Règle d'injection dans le brouillon :** les entrées de la catégorie principale de l'email, plus toujours les entrées `INFORMATION` (questions générales). Sans cette règle, une question secondaire comme « ouvrez-vous le samedi ? » dans un email de suivi (email 005) n'aurait aucune réponse disponible.
 
 ## Sources des règles
 

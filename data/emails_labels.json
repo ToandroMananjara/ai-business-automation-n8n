@@ -8,7 +8,7 @@
       "customer_name": "Marie Lefèvre",
       "company": null,
       "email": "marie.lefevre@example.fr",
-      "phone": "06 12 34 56 78",
+      "phone": "06 39 98 12 34",
       "requested_date": null,
       "secondary_requests": [],
       "ambiguous": false
@@ -27,7 +27,7 @@
       "customer_name": "Thomas Garnier",
       "company": null,
       "email": "t.garnier@example.com",
-      "phone": "07 81 22 45 90",
+      "phone": "06 39 98 45 90",
       "requested_date": "2026-10-07",
       "secondary_requests": [],
       "ambiguous": false
@@ -84,7 +84,7 @@
       "customer_name": "Jean Dupont",
       "company": "Dupont Plomberie",
       "email": "contact@plomberie-dupont.example.fr",
-      "phone": "04 72 00 11 22",
+      "phone": "04 65 71 11 22",
       "requested_date": "2026-10-09",
       "secondary_requests": [
         "Le service prend-il les appels le samedi matin ?"
@@ -95,5 +95,456 @@
     "expected_team": "SUIVI_CLIENT",
     "difficulty": "difficile",
     "trap": "Deux demandes : le suivi d'un rendez-vous (intention principale, car SUIVI passe avant INFORMATION dans l'ordre des intentions) et une question sur les horaires, à conserver dans secondary_requests. Ce n'est pas ambigu : chaque demande est claire. C'est un artisan qui écrit : company est renseignée. « Vendredi », écrit le jeudi 8 octobre, donne le 9 octobre, soit moins de 48 heures : HIGH."
+  },
+  {
+    "message_id": "msg-006",
+    "expected_filtered": true,
+    "expected": null,
+    "expected_manual_review": false,
+    "expected_team": null,
+    "difficulty": "facile",
+    "trap": "Réponse automatique : filtrée sans appel au LLM."
+  },
+  {
+    "message_id": "msg-007",
+    "expected_filtered": true,
+    "expected": null,
+    "expected_manual_review": false,
+    "expected_team": null,
+    "difficulty": "facile",
+    "trap": "Erreur de distribution (mailer-daemon) : filtrée, aucune demande client."
+  },
+  {
+    "message_id": "msg-008",
+    "expected_filtered": true,
+    "expected": null,
+    "expected_manual_review": false,
+    "expected_team": null,
+    "difficulty": "facile",
+    "trap": "Absence du bureau : filtrée."
+  },
+  {
+    "message_id": "msg-009",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "URGENT",
+      "customer_name": "Claire Vidal",
+      "company": null,
+      "email": "claire.vidal@example.fr",
+      "phone": "06 39 98 20 11",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": true,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "difficile",
+    "trap": "L'objet commence par « Absence » mais ce n'est PAS une réponse automatique : il ne doit pas être filtré (cas qui a fait resserrer la règle de filtrage). Personne âgée sans chauffage : URGENT. Écrit par la fille : customer_name est la personne qui écrit. « Dès que possible » : requested_date null."
+  },
+  {
+    "message_id": "msg-010",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "URGENT",
+      "customer_name": "François Lambert",
+      "company": null,
+      "email": "f.lambert@example.com",
+      "phone": "06 39 98 33 47",
+      "requested_date": "2026-10-08",
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": true,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "moyen",
+    "trap": "Odeur de gaz : URGENT, revue humaine. La bonne réponse n'est pas un rendez-vous mais l'appel immédiat à l'Urgence Sécurité Gaz (0 800 47 33 33) : c'est l'humain qui doit le dire. « Aujourd'hui » = 8 octobre."
+  },
+  {
+    "message_id": "msg-011",
+    "expected_filtered": false,
+    "expected": {
+      "category": "CANDIDATURE",
+      "priority": "NORMAL",
+      "customer_name": "Lucas Martin",
+      "company": null,
+      "email": "lucas.martin@example.com",
+      "phone": "06 39 98 64 20",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "RECRUTEMENT",
+    "difficulty": "facile",
+    "trap": "Candidature avec CV en pièce jointe : équipe RECRUTEMENT, et le CV doit déclencher le WF2."
+  },
+  {
+    "message_id": "msg-012",
+    "expected_filtered": false,
+    "expected": {
+      "category": "CANDIDATURE",
+      "priority": "NORMAL",
+      "customer_name": "Inès Robert",
+      "company": null,
+      "email": "ines.robert@example.fr",
+      "phone": null,
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "RECRUTEMENT",
+    "difficulty": "facile",
+    "trap": "Candidature sans pièce jointe : RECRUTEMENT, pas de WF2. « À partir de novembre » n'est pas une intervention : requested_date null."
+  },
+  {
+    "message_id": "msg-013",
+    "expected_filtered": false,
+    "expected": {
+      "category": "AUTRE",
+      "priority": "LOW",
+      "customer_name": null,
+      "company": "Visibilité+",
+      "email": "contact@agence-visibilite.example.com",
+      "phone": null,
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": true,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "moyen",
+    "trap": "Démarchage commercial : AUTRE, LOW. Pas de nom de personne : customer_name null. L'agence est l'entreprise de l'expéditeur."
+  },
+  {
+    "message_id": "msg-014",
+    "expected_filtered": false,
+    "expected": {
+      "category": "AUTRE",
+      "priority": "NORMAL",
+      "customer_name": "G. Morel",
+      "company": null,
+      "email": "g.morel@example.fr",
+      "phone": null,
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": true
+    },
+    "expected_manual_review": true,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "difficile",
+    "trap": "Vraiment ambigu : impossible de savoir ce que veut la personne. Catégorie AUTRE et ambiguous true. « Rapidement » n'est ni une date ni un critère d'urgence. Ne pas deviner un dossier."
+  },
+  {
+    "message_id": "msg-015",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "NORMAL",
+      "customer_name": "Karim Diallo",
+      "company": null,
+      "email": "k.diallo@example.com",
+      "phone": "06 39 98 14 77",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "moyen",
+    "trap": "Ton énervé, mais la colère ne vise pas le service : ce n'est pas une réclamation. La catégorie suit la demande, pas l'émotion."
+  },
+  {
+    "message_id": "msg-016",
+    "expected_filtered": false,
+    "expected": {
+      "category": "SUIVI",
+      "priority": "HIGH",
+      "customer_name": "Catherine Blanc",
+      "company": null,
+      "email": "c.blanc@example.fr",
+      "phone": "06 39 98 90 54",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "SUIVI_CLIENT",
+    "difficulty": "moyen",
+    "trap": "Relance polie sur une demande en cours : SUIVI et HIGH (client qui relance). Pas une réclamation : aucun mécontentement exprimé sur le service."
+  },
+  {
+    "message_id": "msg-017",
+    "expected_filtered": false,
+    "expected": {
+      "category": "INFORMATION",
+      "priority": "NORMAL",
+      "customer_name": "Benoît Henry",
+      "company": null,
+      "email": "b.henry@example.com",
+      "phone": null,
+      "requested_date": null,
+      "secondary_requests": [
+        "Montant des frais de déplacement."
+      ],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "facile",
+    "trap": "Deux questions d'information : la zone (principale) et les frais de déplacement (secondaire)."
+  },
+  {
+    "message_id": "msg-018",
+    "expected_filtered": false,
+    "expected": {
+      "category": "INFORMATION",
+      "priority": "LOW",
+      "customer_name": "Odile Faure",
+      "company": null,
+      "email": "o.faure@example.fr",
+      "phone": null,
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "facile",
+    "trap": "Remerciement : INFORMATION, LOW. Aucune réponse n'est indispensable, mais un brouillon de remerciement reste utile."
+  },
+  {
+    "message_id": "msg-019",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "NORMAL",
+      "customer_name": "Pauline Leroy",
+      "company": null,
+      "email": "p.leroy@example.org",
+      "phone": "06 39 98 26 93",
+      "requested_date": "2026-10-20",
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "moyen",
+    "trap": "Deux dates dans le message : requested_date est la nouvelle date souhaitée (20 octobre), pas l'ancienne."
+  },
+  {
+    "message_id": "msg-020",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RECLAMATION",
+      "priority": "HIGH",
+      "customer_name": "Antoine Fontaine",
+      "company": null,
+      "email": "a.fontaine@example.com",
+      "phone": "06 39 98 52 18",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": true,
+    "expected_team": "SUIVI_CLIENT",
+    "difficulty": "moyen",
+    "trap": "Réclamation pour absence de l'artisan, deuxième fois : HIGH (relance). « Mardi » est passé : requested_date null."
+  },
+  {
+    "message_id": "msg-021",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "NORMAL",
+      "customer_name": "James Taylor",
+      "company": null,
+      "email": "j.taylor@example.co.uk",
+      "phone": "06 39 98 88 02",
+      "requested_date": "2026-10-13",
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "moyen",
+    "trap": "Message en anglais. « Next Tuesday » écrit le mercredi 7 octobre = mardi 13 octobre. Eau chaude toujours disponible : pas d'urgence."
+  },
+  {
+    "message_id": "msg-022",
+    "expected_filtered": false,
+    "expected": {
+      "category": "SUIVI",
+      "priority": "NORMAL",
+      "customer_name": "Laurent Bernard",
+      "company": "Électricité Bernard",
+      "email": "contact@elec-bernard.example.fr",
+      "phone": "04 65 71 77 40",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "SUIVI_CLIENT",
+    "difficulty": "moyen",
+    "trap": "C'est un artisan qui écrit : company renseignée. « La semaine prochaine » est vague : requested_date null."
+  },
+  {
+    "message_id": "msg-023",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "NORMAL",
+      "customer_name": "Simon Nguyen",
+      "company": null,
+      "email": "s.nguyen@example.fr",
+      "phone": "06 39 98 47 36",
+      "requested_date": "2026-10-14",
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "facile",
+    "trap": "« Le 14 », écrit le 8 octobre = 14 octobre. Visite pour devis : RENDEZ_VOUS."
+  },
+  {
+    "message_id": "msg-024",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "NORMAL",
+      "customer_name": "Michel Rousseau",
+      "company": null,
+      "email": "m.rousseau@example.com",
+      "phone": "04 65 71 58 09",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "facile",
+    "trap": "« La semaine du 19 » est une plage, pas une date : requested_date null."
+  },
+  {
+    "message_id": "msg-025",
+    "expected_filtered": false,
+    "expected": {
+      "category": "INFORMATION",
+      "priority": "NORMAL",
+      "customer_name": "Raphaël Chevalier",
+      "company": null,
+      "email": "r.chevalier@example.com",
+      "phone": "06 39 98 58 62",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "moyen",
+    "trap": "Question d'information, pas encore une demande de rendez-vous. La réponse doit venir de la FAQ, sans inventer de certification."
+  },
+  {
+    "message_id": "msg-026",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RECLAMATION",
+      "priority": "NORMAL",
+      "customer_name": "Hélène Carpentier",
+      "company": null,
+      "email": "helene.carpentier@example.fr",
+      "phone": "04 65 71 30 62",
+      "requested_date": null,
+      "secondary_requests": [
+        "Demande que l'artisan repasse pour reprendre la réparation."
+      ],
+      "ambiguous": false
+    },
+    "expected_manual_review": true,
+    "expected_team": "SUIVI_CLIENT",
+    "difficulty": "difficile",
+    "trap": "Deux demandes : la réclamation est principale (rang 1), le nouveau passage est secondaire. Fuite qui goutte, pas de dégât en cours : NORMAL."
+  },
+  {
+    "message_id": "msg-027",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "URGENT",
+      "customer_name": "Nadia Girard",
+      "company": null,
+      "email": "n.girard@example.org",
+      "phone": "06 39 98 71 05",
+      "requested_date": "2026-10-09",
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": true,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "facile",
+    "trap": "Panne électrique totale : URGENT. Message sur une seule ligne, signature en fin de phrase."
+  },
+  {
+    "message_id": "msg-028",
+    "expected_filtered": false,
+    "expected": {
+      "category": "SUIVI",
+      "priority": "NORMAL",
+      "customer_name": "Thomas Mercier",
+      "company": null,
+      "email": "t.mercier@example.org",
+      "phone": "06 39 98 03 81",
+      "requested_date": null,
+      "secondary_requests": [
+        "Date de début des travaux."
+      ],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "SUIVI_CLIENT",
+    "difficulty": "moyen",
+    "trap": "Deux questions distinctes sur le même dossier : confirmation de réception (principale) et date de début des travaux (secondaire)."
+  },
+  {
+    "message_id": "msg-029",
+    "expected_filtered": false,
+    "expected": {
+      "category": "INFORMATION",
+      "priority": "NORMAL",
+      "customer_name": "Julie Perrin",
+      "company": null,
+      "email": "julie.perrin@example.fr",
+      "phone": "06 39 98 66 13",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "moyen",
+    "trap": "Inverse de l'email 004 : expéditeur no-reply, mais le corps contient l'email et le téléphone du client, à extraire. Ne pas filtrer un formulaire."
+  },
+  {
+    "message_id": "msg-030",
+    "expected_filtered": false,
+    "expected": {
+      "category": "SUIVI",
+      "priority": "HIGH",
+      "customer_name": "Véronique Dumas",
+      "company": null,
+      "email": "v.dumas@example.fr",
+      "phone": null,
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "SUIVI_CLIENT",
+    "difficulty": "difficile",
+    "trap": "Échéance « avant vendredi », écrite le jeudi 8 octobre : moins de 48 heures, HIGH. Mais ce n'est pas une intervention : requested_date null. « Plombier Martin » est l'artisan concerné, pas l'entreprise de la cliente."
   }
 ]

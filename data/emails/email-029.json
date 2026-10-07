@@ -1,0 +1,7 @@
+{
+  "message_id": "msg-029",
+  "received_at": "2026-10-09T09:30:00+02:00",
+  "sender": "no-reply@formulaire.example.com",
+  "subject": "Nouveau message depuis le formulaire de contact",
+  "body": "Nouveau message reçu via le formulaire du site.\n\nNom : Julie Perrin\nEmail : julie.perrin@example.fr\nTéléphone : 06 39 98 66 13\nMessage : Bonjour, vos artisans interviennent-ils le samedi ?\n\n---\nCe message a été généré automatiquement, merci de ne pas y répondre."
+}

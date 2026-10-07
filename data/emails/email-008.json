@@ -1,0 +1,7 @@
+{
+  "message_id": "msg-008",
+  "received_at": "2026-10-08T09:00:00+02:00",
+  "sender": "rh-contact@example.org",
+  "subject": "Absence du bureau jusqu'au 12 octobre",
+  "body": "Bonjour,\n\nJe suis absent du bureau jusqu'au lundi 12 octobre. Pour toute urgence, merci de contacter l'accueil.\n\nCordialement"
+}
