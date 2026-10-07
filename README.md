@@ -81,6 +81,15 @@ Le projet utilise un **compte de service** Google : une identité technique, san
 5. Dans n8n, créer un credential **Google Service Account API** avec `client_email` et `private_key` de la clé JSON. Supprimer ensuite le fichier de clé.
 6. Importer `workflows/wf0-setup-google-sheets.json`, lui associer le credential, et l'exécuter **une fois** : il crée les onglets décrits dans `config/sheets.json` et charge la FAQ.
 
+### 5. Configurer Slack (alertes)
+
+1. Créer un espace de travail Slack et un canal `#alertes`.
+2. Sur https://api.slack.com/apps : **Create New App**, application vide, droit **`chat:write`** seulement (OAuth & Permissions > Bot Token Scopes), puis **Install to Workspace**.
+3. Inviter le bot dans le canal : `/invite @<nom de l'application>`.
+4. Dans n8n, créer un credential **Slack API** avec le jeton du bot (`xoxb-...`).
+
+Le WF3 (gestion des erreurs) doit être **activé** avant d'être désigné comme workflow d'erreur du WF1.
+
 ## Versionner les workflows
 
 Les workflows vivent dans la base de n8n. Pour les enregistrer dans le dépôt :
