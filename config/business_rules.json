@@ -35,6 +35,10 @@
     "NORMAL": 24,
     "LOW": 72
   },
+  "deadline_escalation": {
+    "within_hours": 48,
+    "min_priority": "HIGH"
+  },
   "manual_review": {
     "categories": [
       "RECLAMATION",
