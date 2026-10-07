@@ -6,7 +6,7 @@
 | **Dépôt** | `ai-business-automation-n8n` |
 | **Type** | Prototype de démonstration (MVP) |
 | **Auteur** | Toandromananjara Mahasalotra |
-| **Version** | 2.0 — 2026-10-07 |
+| **Version** | 2.1 — 2026-10-07 (retrait d'OmniRoute, LLM en direct) |
 
 ---
 
@@ -95,7 +95,7 @@ flowchart TD
     B[Webhook : document CV ou facture] --> W2[WF2 Extraction documentaire]
     S[Schedule : lundi 8h] --> W4[WF4 Reporting hebdomadaire]
 
-    W1 --> LLM[(OmniRoute : LLM gratuits)]
+    W1 --> LLM[(LLM : Groq, secours Gemini)]
     W2 --> LLM
     KB[(Sheet FAQ)] --> W1
 
@@ -196,6 +196,8 @@ Le Webhook est préféré au Gmail Trigger pour le MVP : il évite la configurat
 
 Un seul appel produit classification et extraction : moins de latence, moins de coût, et une seule sortie à valider.
 
+L'appel part vers le modèle principal (Groq). Si celui-ci échoue malgré les relances, la sortie d'erreur du node envoie la même requête au modèle de secours (Gemini). Le nom du modèle qui a répondu est conservé dans la colonne `model`.
+
 ```json
 {
   "category": "RENDEZ_VOUS",
@@ -264,7 +266,7 @@ Dans le MVP, la validation humaine se fait en modifiant la colonne `status` dans
 
 ### 6.9 Colonnes de l'onglet `requests`
 
-`message_id`, `received_at`, `processed_at`, `customer_name`, `company`, `email`, `phone`, `category`, `priority`, `requested_date`, `summary`, `draft_response`, `status`, `review_reason`, `execution_id`.
+`message_id`, `received_at`, `processed_at`, `customer_name`, `company`, `email`, `phone`, `category`, `priority`, `requested_date`, `summary`, `draft_response`, `model`, `status`, `review_reason`, `execution_id`.
 
 ---
 
@@ -612,23 +614,39 @@ ai-business-automation-n8n/
 
 | Décision | Choix | Justification |
 |---|---|---|
-| Hébergement n8n | **Docker en local** (édition Community) | Gratuit, sans limite d'exécutions ni d'expiration ; même réseau Docker que la passerelle LLM ; projet reproductible par un tiers avec `docker compose up` |
-| Accès aux LLM | **Modèles gratuits via OmniRoute**, passerelle auto-hébergée compatible OpenAI | Coût nul ; un seul point d'accès pour plusieurs fournisseurs ; changer de modèle est une modification de configuration, pas de workflow |
+| Hébergement n8n | **Docker en local** (édition Community) | Gratuit, sans limite d'exécutions ni d'expiration ; projet reproductible par un tiers avec `docker compose up` |
+| LLM principal | **Groq**, offre gratuite officielle, appelé directement | Réponses en 0,4 à 2 s lors des tests ; modèles avec sortie JSON structurée |
+| LLM de secours | **Google Gemini**, offre gratuite officielle, appelé directement | Fournisseur indépendant de Groq : une panne de l'un n'affecte pas l'autre |
+| Bascule entre fournisseurs | **Dans n8n**, par la sortie d'erreur du node LLM principal | Visible dans le workflow et testable, contrairement à une bascule cachée dans une passerelle |
+
+### 19.2 Décision révisée : abandon de la passerelle OmniRoute
+
+La première version prévoyait une passerelle auto-hébergée (OmniRoute) devant les fournisseurs gratuits. Elle a été testée le 2026-10-07, puis retirée.
+
+| Constat mesuré | Conséquence |
+|---|---|
+| Catalogue de modèles périmé : des modèles proposés n'existaient plus chez le fournisseur | Erreurs à l'exécution sur des modèles pourtant listés |
+| Erreurs 403 sur Groq via la passerelle, alors que les mêmes appels en direct répondaient en moins de 2 s | Cause impossible à diagnostiquer : la passerelle masquait le message d'origine |
+| Gemini saturé (503) : relances internes, 60 à 80 s par réponse | La bascule promise ne compensait pas, faute d'un second fournisseur fonctionnel |
+
+Une dépendance qu'on ne peut pas déboguer va contre l'objectif d'automatisations simples et robustes. La bascule entre fournisseurs est conservée, mais implémentée dans n8n.
+
+### 19.3 Contraintes induites par les LLM gratuits
 
 ### 19.2 Contraintes induites par les LLM gratuits
 
-- **Modèle figé pour l'évaluation.** La bascule automatique entre fournisseurs est utile pour la démonstration, mais elle rend les résultats non reproductibles. L'évaluation se fait sur un seul modèle explicitement nommé, sans alias de routage automatique.
-- **Modèle tracé.** Le nom du modèle qui a réellement répondu est enregistré dans une colonne `model` des onglets `requests`, `cv` et `invoices`.
+- **Modèle figé pour l'évaluation.** La bascule vers le secours est utile en démonstration, mais elle mélangerait deux modèles dans les résultats. L'évaluation se fait sur le modèle principal seul ; le modèle de secours est évalué séparément.
+- **Modèle tracé.** Le nom du modèle qui a réellement répondu (principal ou secours) est enregistré dans une colonne `model` des onglets `requests`, `cv` et `invoices`.
 - **Quotas.** Les offres gratuites limitent le nombre de requêtes par minute et par jour. Les appels LLM utilisent Retry On Fail avec délai croissant, et les erreurs 429 sont journalisées par WF3. Les 30 emails de l'évaluation sont envoyés avec un délai entre chaque requête.
 - **Sortie structurée inégale.** Tous les modèles gratuits ne respectent pas un JSON schema. La validation côté n8n (§ 6.5) reste donc la garantie principale.
 - **Confidentialité.** Certains fournisseurs gratuits peuvent conserver ou réutiliser les requêtes. C'est acceptable ici parce que toutes les données sont fictives. Avec des données réelles de clients, il faudrait un fournisseur sous contrat ou un modèle hébergé en interne. Ce point figure dans la section Limites du README.
-- **Passerelle non exposée.** OmniRoute n'est joignable que depuis le réseau Docker interne, sans port publié vers l'extérieur.
+- **Catalogue mouvant.** Les fournisseurs retirent des modèles sans préavis (ex. un modèle Gemini fermé aux nouveaux comptes). Les noms de modèles sont dans `.env` (`LLM_PRIMARY_MODEL`, `LLM_FALLBACK_MODEL`) pour être changés sans modifier les workflows.
 
-### 19.3 Décisions ouvertes
+### 19.4 Décisions ouvertes
 
 | Décision | Options | Impact |
 |---|---|---|
-| Modèle de référence pour l'évaluation | À choisir après un test comparatif rapide sur 5 emails | Qualité de l'extraction, respect du JSON |
+| Modèles principal et de secours | À choisir après un test comparatif rapide sur 5 emails | Qualité de l'extraction, respect du JSON |
 | Canal de notification | Email, Slack, Telegram | Simplicité de configuration |
 | Date limite de candidature | À fixer | Découpage du planning (§ 21) |
 

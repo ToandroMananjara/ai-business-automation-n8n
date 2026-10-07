@@ -1,11 +1,12 @@
 # Secrets
 .env
+.env.*
+!.env.example
 *.key
 credentials/
 
 # Données locales des conteneurs
 n8n_data/
-omniroute_data/
 
 # Système et éditeurs
 .DS_Store

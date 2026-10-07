@@ -1,6 +1,6 @@
 # AI Business Automation — n8n
 
-Prototype de démonstration : automatisation du traitement des demandes clients et de l'extraction documentaire d'un centre d'appel au service d'artisans, avec n8n et des LLM gratuits.
+Prototype de démonstration : automatisation du traitement des demandes clients et de l'extraction documentaire d'un centre d'appel au service d'artisans, avec n8n et des LLM gratuits (Groq, Google Gemini).
 
 Toutes les données sont fictives. Le cahier des charges complet est dans [`docs/cdc.md`](docs/cdc.md).
 
@@ -11,24 +11,26 @@ Toutes les données sont fictives. Le cahier des charges complet est dans [`docs
 ```mermaid
 flowchart LR
     U[Navigateur] -->|localhost:5678| N[n8n]
-    U -->|localhost:20128| O[OmniRoute]
-    N -->|http://omniroute:20128/v1| O
-    O --> P[Fournisseurs LLM gratuits]
-    N --> G[(Google Sheets)]
+    N -->|principal| Q[Groq API]
+    N -.->|secours si erreur| G[Google Gemini API]
+    N --> S[(Google Sheets)]
 ```
 
-| Service | Rôle | Adresse locale |
-|---|---|---|
-| n8n | Orchestration des workflows | http://localhost:5678 |
-| OmniRoute | Passerelle LLM compatible OpenAI, regroupe des fournisseurs gratuits | http://localhost:20128 |
+| Composant | Rôle |
+|---|---|
+| n8n (Docker, local) | Orchestration des workflows, http://localhost:5678 |
+| Groq | LLM principal, offre gratuite officielle |
+| Google Gemini | LLM de secours, offre gratuite officielle, appelé si Groq échoue |
+| Google Sheets | Stockage des résultats et de la FAQ |
 
-Les deux ports ne sont publiés que sur `127.0.0.1`. n8n joint OmniRoute par le réseau Docker interne.
+Le port de n8n n'est publié que sur `127.0.0.1`. La bascule entre les deux fournisseurs est faite dans les workflows, par la sortie d'erreur du node LLM principal.
 
 ## Prérequis
 
 - Docker et Docker Compose
 - `openssl` (pour générer les secrets)
-- Un compte Google (pour Google Sheets)
+- Un compte Google (pour Google Sheets et la clé Gemini)
+- Un compte Groq (gratuit)
 
 ## Installation
 
@@ -38,30 +40,31 @@ Les deux ports ne sont publiés que sur `127.0.0.1`. n8n joint OmniRoute par le 
 ./scripts/init_env.sh
 ```
 
-Le script copie `.env.example` en `.env`, génère tous les secrets et affiche le mot de passe initial du dashboard OmniRoute. Il refuse d'écraser un `.env` existant.
+Le script copie `.env.example` en `.env` et génère les secrets. Il refuse d'écraser un `.env` existant.
+
+Compléter ensuite à la main :
+
+| Variable | Où l'obtenir |
+|---|---|
+| `GROQ_API_KEY` | https://console.groq.com, menu API Keys |
+| `GEMINI_API_KEY` | https://aistudio.google.com, bouton Get API key |
+| `LLM_PRIMARY_MODEL`, `LLM_FALLBACK_MODEL` | Voir la section Résultats (modèles retenus après le test comparatif) |
 
 Important : ne plus modifier `N8N_ENCRYPTION_KEY` après le premier lancement, sinon les credentials enregistrés dans n8n deviennent illisibles.
 
-### 2. Lancer les services
+### 2. Lancer n8n
 
 ```bash
 docker compose up -d
 docker compose ps
 ```
 
-### 3. Configurer OmniRoute
+Le premier démarrage prend environ 30 secondes.
 
-1. Ouvrir http://localhost:20128 et se connecter avec le mot de passe affiché à l'étape 1.
-2. Activer un ou plusieurs fournisseurs gratuits.
-3. Créer une clé API et la reporter dans `.env` (`OMNIROUTE_API_KEY`).
-4. Choisir le modèle de référence et le reporter dans `.env` (`LLM_MODEL`), puis `docker compose up -d` pour le prendre en compte.
-
-### 4. Configurer n8n
+### 3. Configurer n8n
 
 1. Ouvrir http://localhost:5678 et créer le compte propriétaire.
-2. Créer un credential **OpenAI** :
-   - API Key : la clé OmniRoute ;
-   - Base URL : `http://omniroute:20128/v1`.
+2. Créer les credentials des deux fournisseurs LLM, avec les clés du `.env` (le détail est donné dans la section Workflows).
 3. Créer un credential **Header Auth** pour les webhooks :
    - Name : `X-Api-Key` ;
    - Value : la valeur de `WEBHOOK_API_KEY` dans `.env`.
@@ -76,7 +79,7 @@ Les workflows vivent dans la base de n8n. Pour les enregistrer dans le dépôt :
 ./scripts/import_workflows.sh   # workflows/*.json -> n8n
 ```
 
-L'export ne contient pas la valeur des credentials, seulement leur nom. Après un import sur une nouvelle installation, il faut recréer les credentials (étape 4).
+L'export ne contient pas la valeur des credentials, seulement leur nom. Après un import sur une nouvelle installation, il faut recréer les credentials (étape 3).
 
 ## Fichiers montés dans n8n
 
@@ -104,5 +107,5 @@ L'export ne contient pas la valeur des credentials, seulement leur nom. Après u
 
 - Aucun secret dans le dépôt : `.env` est ignoré par git, seul `.env.example` est versionné.
 - Les credentials sont chiffrés par n8n avec `N8N_ENCRYPTION_KEY`.
-- OmniRoute exige une clé API (`REQUIRE_API_KEY=true`), puisqu'il est joignable depuis un autre conteneur.
+- Les clés des fournisseurs LLM sont saisies dans des credentials n8n, jamais dans les workflows.
 - Données fictives uniquement.
