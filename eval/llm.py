@@ -3,6 +3,7 @@
 La préparation de l'email (normalisation, message envoyé au modèle) reproduit ce que
 fera le WF1 dans n8n, pour que les résultats mesurés ici valent pour le workflow.
 """
+import csv
 import html
 import json
 import pathlib
@@ -109,17 +110,21 @@ def user_message(email):
     )
 
 
-def call_llm(provider, model, email, env, options=None, max_attempts=3):
+def classification_messages(email):
+    return [
+        {"role": "system", "content": system_prompt()},
+        {"role": "user", "content": user_message(email)},
+    ]
+
+
+def call_llm(provider, model, messages, env, options=None, max_attempts=3):
     """Appelle le modèle. Retourne un dict : contenu brut, usage, durée, erreur éventuelle."""
     url, key_name = PROVIDERS[provider]
     body = {
         "model": model,
         "temperature": 0,
         "max_completion_tokens": 1500,
-        "messages": [
-            {"role": "system", "content": system_prompt()},
-            {"role": "user", "content": user_message(email)},
-        ],
+        "messages": messages,
         **(options or {}),
     }
     headers = {
@@ -223,3 +228,86 @@ def score(output, expected):
     inventions = [f for f in FIELDS if expected[f] is None and output.get(f) is not None]
     secondary_ok = len(output.get("secondary_requests") or []) == len(expected["secondary_requests"])
     return {"fields": fields, "inventions": inventions, "secondary_count_ok": secondary_ok}
+
+
+# --- Brouillon de réponse -------------------------------------------------------
+
+def load_faq():
+    with open(ROOT / "data" / "faq.csv", newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def faq_for(category, faq):
+    """Entrées injectées : catégorie principale, plus toujours les questions générales."""
+    return [e for e in faq if e["category"] in (category, "INFORMATION")]
+
+
+def draft_schema():
+    return {
+        "name": "draft_response",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "draft": {"type": "string"},
+                "faq_ids_used": {"type": "array", "items": {"type": "string"}},
+                "unanswered": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["draft", "faq_ids_used", "unanswered"],
+            "additionalProperties": False,
+        },
+    }
+
+
+def draft_messages(email, qualification, entries):
+    secondary = qualification.get("secondary_requests") or []
+    faq_block = "\n".join(f"[{e['id']}] {e['question']} — {e['answer']}" for e in entries)
+    user = (
+        f"Email du client :\nObjet : {email['subject']}\n{normalize_body(email['body'])}\n\n"
+        f"Qualification : catégorie {qualification['category']} ; "
+        f"nom : {qualification.get('customer_name') or 'inconnu'} ; "
+        f"demandes secondaires : {' ; '.join(secondary) if secondary else 'aucune'}\n\n"
+        f"Entrées de FAQ fournies :\n{faq_block}\n\n"
+        f"Rappel : rédige le brouillon dans la langue de l'email du client, même si la FAQ est en français."
+    )
+    system = (ROOT / "prompts" / "draft_response.md").read_text()
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def parse_draft(content):
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        return None, f"JSON invalide : {e}"
+    if not isinstance(data.get("draft"), str) or not data["draft"].strip():
+        return None, "brouillon vide"
+    return data, None
+
+
+# Un brouillon complet se termine par la signature (française ou anglaise). Ce contrôle
+# détecte un texte tronqué, que la validité du JSON ne révèle pas.
+SIGNATURES = ("Le service client", "Customer Service")
+
+
+def check_draft(draft, email, qualification, entries):
+    """Contrôles déterministes d'un brouillon.
+
+    - citations : chaque identifiant cité fait partie des entrées fournies ;
+    - nombres : chaque nombre du brouillon figure dans l'email, la qualification
+      ou les entrées de FAQ citées (un délai, un prix ou un numéro inventé est détecté) ;
+    - signature : le texte se termine par la signature, sinon il est probablement tronqué.
+    """
+    provided = {e["id"] for e in entries}
+    cited = draft.get("faq_ids_used") or []
+    invalid_citations = [i for i in cited if i not in provided]
+
+    used = [e for e in entries if e["id"] in cited]
+    sources = " ".join([email["subject"], email["body"], json.dumps(qualification, ensure_ascii=False)]
+                       + [e["question"] + " " + e["answer"] for e in used])
+    known = set(re.findall(r"\d+", sources))
+    unsupported_numbers = sorted({n for n in re.findall(r"\d+", draft["draft"]) if n not in known})
+
+    signed = draft["draft"].rstrip().endswith(SIGNATURES)
+    return {"invalid_citations": invalid_citations, "unsupported_numbers": unsupported_numbers,
+            "missing_signature": not signed}

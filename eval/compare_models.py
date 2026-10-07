@@ -4,23 +4,31 @@
 Ce n'est pas l'évaluation finale : avec 5 emails, ce test sert à écarter un modèle
 clairement moins bon ou trop gourmand en tokens, pas à départager finement.
 
-Usage : python3 eval/compare_models.py
+Usage : python3 eval/compare_models.py [filtre]
+Exemple : python3 eval/compare_models.py json_object  (seulement les variantes dont le nom contient « json_object »)
 Les résultats bruts sont écrits dans eval/runs/ (ignoré par git).
 """
 import json
+import sys
 import time
 from datetime import datetime
 
-from llm import ROOT, apply_business_rules, call_llm, load_env, output_schema, parse_output, score
+from llm import (ROOT, apply_business_rules, call_llm, classification_messages, load_env, output_schema,
+                 parse_output, score)
 
 EMAILS = ["msg-001", "msg-002", "msg-004", "msg-005", "msg-021"]
 
 STRICT_JSON = {"type": "json_schema", "json_schema": output_schema()}
+SIMPLE_JSON = {"type": "json_object"}
+# (fournisseur, modèle, nom de la variante, options)
 MODELS = [
-    ("groq", "openai/gpt-oss-20b", {"reasoning_effort": "low", "response_format": STRICT_JSON}),
-    ("groq", "openai/gpt-oss-120b", {"reasoning_effort": "low", "response_format": STRICT_JSON}),
-    ("groq", "qwen/qwen3.8-27b", {"reasoning_effort": "none", "response_format": STRICT_JSON}),
-    ("gemini", "gemini-3.1-flash-lite", {"response_format": STRICT_JSON}),
+    ("groq", "openai/gpt-oss-20b", "gpt-oss-20b json_schema", {"reasoning_effort": "low", "response_format": STRICT_JSON}),
+    ("groq", "openai/gpt-oss-120b", "gpt-oss-120b json_schema", {"reasoning_effort": "low", "response_format": STRICT_JSON}),
+    ("groq", "qwen/qwen3.8-27b", "qwen3.8-27b json_schema", {"reasoning_effort": "none", "response_format": STRICT_JSON}),
+    ("gemini", "gemini-3.1-flash-lite", "gemini-3.1-flash-lite json_schema", {"response_format": STRICT_JSON}),
+    # Variantes retenues : JSON simple, car le mode json_schema de Groq tronque les textes longs de qwen.
+    ("groq", "qwen/qwen3.8-27b", "qwen3.8-27b json_object", {"reasoning_effort": "none", "response_format": SIMPLE_JSON}),
+    ("gemini", "gemini-3.1-flash-lite", "gemini-3.1-flash-lite json_object", {"response_format": SIMPLE_JSON}),
 ]
 
 
@@ -32,12 +40,13 @@ def main():
         e = json.loads(f.read_text())
         emails[e["message_id"]] = e
 
+    selected = [m for m in MODELS if len(sys.argv) < 2 or sys.argv[1] in m[2]]
     runs = []
-    for provider, model, options in MODELS:
+    for provider, model, variant, options in selected:
         for mid in EMAILS:
-            result = call_llm(provider, model, emails[mid], env, options)
+            result = call_llm(provider, model, classification_messages(emails[mid]), env, options)
             output, parse_error = (None, result["error"]) if result["error"] else parse_output(result["content"])
-            run = {"provider": provider, "model": model, "message_id": mid, **result,
+            run = {"provider": provider, "model": variant, "message_id": mid, **result,
                    "parse_error": parse_error, "output": output}
             if output:
                 run["score_llm"] = score(output, labels[mid]["expected"])
@@ -46,7 +55,7 @@ def main():
             runs.append(run)
             status = "ok" if output else f"ÉCHEC ({parse_error[:60]})"
             wait = result.get("quota_wait_seconds") or 0
-            print(f"{model:26s} {mid}  réponse {result['seconds']:5.1f}s  attente quota {wait:4.1f}s  {status}")
+            print(f"{variant:34s} {mid}  réponse {result['seconds']:5.1f}s  attente quota {wait:4.1f}s  {status}")
             if provider == "gemini":
                 time.sleep(4)  # quota par minute plus serré sur l'offre gratuite
 

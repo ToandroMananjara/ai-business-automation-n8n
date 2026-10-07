@@ -6,7 +6,7 @@
 | **Dépôt** | `ai-business-automation-n8n` |
 | **Type** | Prototype de démonstration (MVP) |
 | **Auteur** | Toandromananjara Mahasalotra |
-| **Version** | 3.2 — 2026-10-07 |
+| **Version** | 3.3 — 2026-10-07 |
 
 Historique des versions :
 
@@ -17,6 +17,7 @@ Historique des versions :
 | 3.0 | Alignement sur le fonctionnement réel d'un centre d'appel : filtrage, rattachement, routage par équipe, délais de réponse, catégorie `CANDIDATURE`, registre `tickets` |
 | 3.1 | Règles d'étiquetage sourcées : une intention principale par demande, demandes secondaires conservées, ambiguïté redéfinie, seuils de réussite fixés avant la mesure |
 | 3.2 | Modèles choisis après test comparatif ; calendrier dans le message envoyé au modèle ; filet de sécurité des 48 heures dans le code |
+| 3.3 | Prompt de brouillon : sortie avec citations de FAQ et points non couverts, contrôles automatiques ; passage en JSON simple (troncature silencieuse du mode strict) |
 
 ---
 
@@ -379,6 +380,31 @@ Un second appel LLM rédige un brouillon **uniquement à partir des entrées de 
 
 **Aucune réponse rédigée par le LLM n'est envoyée automatiquement.** L'accusé de réception à modèle fixe (V2) est la seule communication automatique envisagée : il ne contient aucun texte généré.
 
+Le modèle ne renvoie pas seulement un texte, mais :
+
+```json
+{
+  "draft": "Bonjour Madame Lefèvre, ...",
+  "faq_ids_used": ["faq-08", "faq-11"],
+  "unanswered": []
+}
+```
+
+- `faq_ids_used` : les entrées de FAQ sur lesquelles le brouillon s'appuie. Le code vérifie qu'elles font partie des entrées fournies : une citation inventée signale un brouillon inventé.
+- `unanswered` : les points de l'email que la FAQ ne couvre pas. L'agent voit immédiatement ce qu'il doit compléter.
+
+Deux contrôles déterministes sont appliqués à chaque brouillon :
+
+| Contrôle | Règle |
+|---|---|
+| Citations | Chaque identifiant cité fait partie des entrées fournies |
+| Nombres | Chaque nombre du brouillon (délai, prix, numéro, horaire) figure dans l'email, la qualification ou les entrées de FAQ citées |
+| Signature | Le brouillon se termine par la signature (« Le service client » ou « Customer Service ») ; sinon il est probablement tronqué |
+
+Un brouillon qui échoue à un contrôle n'est pas proposé tel quel : la demande passe en `NEEDS_MANUAL_REVIEW` avec la raison du rejet.
+
+Règles du prompt (`prompts/draft_response.md`) : n'utiliser que les entrées qui répondent à une demande du client ; ne prendre aucun engagement (rendez-vous, date, montant), mais pouvoir accuser réception ; répondre dans la langue du client.
+
 L'agent indique ce qu'il a fait du brouillon dans `draft_outcome` : `SENT_AS_IS` (envoyé tel quel), `EDITED` (corrigé puis envoyé), `DISCARDED` (écarté). C'est la mesure de l'utilité réelle des brouillons.
 
 ### 7.11 Notification
@@ -408,7 +434,7 @@ Dans le MVP, les agents font évoluer le statut en modifiant la colonne `status`
 | Identification | `ticket_id`, `message_id`, `received_at`, `processed_at`, `related_ticket_id` |
 | Données extraites | `customer_name`, `company`, `email`, `phone`, `category`, `priority`, `requested_date`, `secondary_requests`, `summary` |
 | Aiguillage | `team`, `due_at`, `status`, `review_reason` |
-| Réponse | `draft_response`, `draft_outcome` |
+| Réponse | `draft_response`, `draft_faq_ids`, `draft_unanswered`, `draft_outcome` |
 | Traçabilité | `model`, `execution_id` |
 
 ---
@@ -540,7 +566,7 @@ Chaque prompt définit :
 
 Les listes de valeurs du prompt (catégories, priorités, ordre des intentions) ne sont pas écrites en dur : elles sont injectées depuis `config/business_rules.json` au moment de l'appel.
 
-Le mode de sortie structurée (`response_format` de type `json_schema`) est utilisé, en plus de la validation côté n8n. Les trois modèles Groq testés et Gemini l'acceptent.
+Les appels utilisent le mode **JSON simple** (`response_format` de type `json_object`), et non le mode strict `json_schema` : en mode strict, Groq tronque silencieusement les textes de `qwen3.8-27b` vers 140 tokens, tout en renvoyant un JSON valide (`eval/model-selection.md`). La conformité au schéma est vérifiée par le code (§ 7.6).
 
 ---
 
@@ -614,6 +640,15 @@ Les seuils sont définis **avant** de lancer l'évaluation, pour ne pas les ajus
 Avec 30 emails, une seule erreur fait varier un taux de plus de 3 points : ces seuils indiquent une tendance, pas une garantie.
 
 Outil : script d'évaluation dans `eval/`, qui respecte le quota de tokens par minute du fournisseur.
+
+### 13.5 Évaluation des brouillons
+
+Les brouillons sont évalués **séparément** de la classification, sur les 17 emails qui en reçoivent un. Le modèle reçoit la qualification attendue (l'étiquette) : on mesure la qualité du brouillon seule, sans que les erreurs de classification la faussent.
+
+1. Contrôles automatiques : JSON valide, citations valides, aucun nombre non sourcé, signature présente.
+2. **Relecture humaine** de chaque brouillon, avec une grille : fidèle (rien d'inventé), complet (chaque demande traitée ou signalée), ton (professionnel, sans engagement), langue.
+
+Les contrôles automatiques sont nécessaires mais pas suffisants : lors de la première exécution, ils étaient tous au vert alors que la relecture a trouvé 5 brouillons tronqués et une réponse en français à un client anglophone (`eval/draft-review.md`).
 
 Attention : 30 exemples donnent un ordre de grandeur, pas une estimation précise. Le README le dit.
 
@@ -741,6 +776,8 @@ ai-business-automation-n8n/
 │   ├── llm.py
 │   ├── compare_models.py
 │   ├── model-selection.md
+│   ├── check_drafts.py
+│   ├── draft-review.md
 │   ├── baseline_keywords.py
 │   ├── run_eval.py
 │   └── results.md

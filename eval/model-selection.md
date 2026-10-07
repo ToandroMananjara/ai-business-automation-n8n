@@ -10,7 +10,7 @@ Test comparatif du 2026-10-07, avec `eval/compare_models.py`.
 |---|---|
 | Emails | 5 emails représentatifs du jeu de test : `msg-001` (standard), `msg-002` (HTML, date relative, urgence), `msg-004` (expéditeur `no-reply` sans coordonnées), `msg-005` (deux demandes, échéance de moins de 48 h), `msg-021` (anglais, « next Tuesday ») |
 | Prompt | `prompts/classify_extract.md`, identique pour tous les modèles ; ses exemples ne viennent pas du jeu de test |
-| Sortie | JSON strict (`response_format` de type `json_schema`) |
+| Sortie | JSON strict (`response_format` de type `json_schema`) pour le choix ; voir plus bas la correction en JSON simple |
 | Paramètres | `temperature: 0` ; raisonnement réglé au minimum (`reasoning_effort: low` pour `gpt-oss`, `none` pour `qwen`) |
 | Notation | 8 champs comparés à l'étiquette, téléphone comparé chiffres seulement ; champs inventés (attendu `null`, obtenu une valeur) ; nombre de demandes secondaires |
 | Temps | Temps de réponse du modèle, **hors** attente volontaire pour respecter le quota |
@@ -62,6 +62,21 @@ Un appel de classification consomme environ **2 450 tokens** (2 330 en entrée, 
 ## Découverte technique : l'en-tête User-Agent
 
 Les premiers appels depuis Python ont échoué avec une erreur **403 « error code: 1010 »**. Ce code vient de Cloudflare, qui protège l'API de Groq : il refuse les requêtes dont le `User-Agent` ressemble à un script (`Python-urllib`). Avec un `User-Agent` explicite, les mêmes appels réussissent. C'est très probablement aussi la cause des erreurs 403 observées avec la passerelle OmniRoute, abandonnée plus tôt (CDC § 19.2). Le node HTTP de n8n devra envoyer un `User-Agent` explicite.
+
+## Correction après coup : JSON simple au lieu de JSON strict
+
+En testant le prompt de brouillon (`eval/draft-review.md`), un défaut silencieux est apparu : **en mode `json_schema`, Groq tronque les textes de `qwen3.8-27b` vers 140 tokens**, au milieu d'une phrase, tout en renvoyant un JSON parfaitement valide. Sur le même email, le mode `json_object` (JSON simple, sans schéma imposé) produit le texte complet.
+
+La classification produit des textes courts (le résumé), restés sous ce seuil : elle n'était pas visiblement touchée, mais elle y était exposée. Les deux appels passent donc en `json_object`. La conformité au schéma (catégories et priorités autorisées, champs présents) est vérifiée par le code, comme prévu (CDC § 7.6).
+
+Vérification en mode `json_object`, mêmes 5 emails :
+
+| Variante | JSON valide | Champs exacts | Inventions | Tokens sortie | Temps de réponse |
+|---|---|---|---|---|---|
+| `qwen3.8-27b` JSON simple | 5/5 | 40/40 | 0 | 137 | 0,9 s |
+| `gemini-3.1-flash-lite` JSON simple | 5/5 | 40/40 | 0 | 141 | 24,8 s |
+
+Le choix des modèles est inchangé.
 
 ## Limites
 
