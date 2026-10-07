@@ -1,0 +1,345 @@
+{
+  "name": "WF0 — Mise en place du classeur Google Sheets",
+  "nodes": [
+    {
+      "id": "n01",
+      "name": "Lancer la mise en place",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "n02",
+      "name": "Lire config/sheets.json",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/config/sheets.json",
+        "options": {}
+      }
+    },
+    {
+      "id": "n03",
+      "name": "Décoder le JSON",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      }
+    },
+    {
+      "id": "n04",
+      "name": "Un item par onglet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Transforme la liste des onglets en un item par onglet,\n// pour que la boucle les traite un par un.\nreturn $input.first().json.data.tabs.map(tab => ({ json: tab }));"
+      }
+    },
+    {
+      "id": "n05",
+      "name": "Pour chaque onglet",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "n06",
+      "name": "Créer l'onglet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        400
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
+      },
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "create",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "title": "={{ $json.title }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n07",
+      "name": "Ligne d'en-têtes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// Un item dont les champs sont les colonnes de l'onglet, avec des valeurs vides.\n// Sur un onglet vide, le node Google Sheets écrit ces noms de champs en ligne 1.\nconst tab = $('Pour chaque onglet').first().json;\nreturn [{ json: Object.fromEntries(tab.columns.map(column => [column, ''])) }];"
+      }
+    },
+    {
+      "id": "n08",
+      "name": "Écrire les en-têtes",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1560,
+        400
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
+      },
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "={{ $('Pour chaque onglet').first().json.title }}"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n09",
+      "name": "Lire data/faq.csv",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        120
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/samples/faq.csv",
+        "options": {}
+      }
+    },
+    {
+      "id": "n10",
+      "name": "Décoder le CSV",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        120
+      ],
+      "parameters": {
+        "operation": "csv",
+        "options": {
+          "headerRow": true
+        }
+      }
+    },
+    {
+      "id": "n11",
+      "name": "Charger la FAQ",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1560,
+        120
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
+      },
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "faq"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Lancer la mise en place": {
+      "main": [
+        [
+          {
+            "node": "Lire config/sheets.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire config/sheets.json": {
+      "main": [
+        [
+          {
+            "node": "Décoder le JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Décoder le JSON": {
+      "main": [
+        [
+          {
+            "node": "Un item par onglet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un item par onglet": {
+      "main": [
+        [
+          {
+            "node": "Pour chaque onglet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pour chaque onglet": {
+      "main": [
+        [
+          {
+            "node": "Lire data/faq.csv",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Créer l'onglet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Créer l'onglet": {
+      "main": [
+        [
+          {
+            "node": "Ligne d'en-têtes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ligne d'en-têtes": {
+      "main": [
+        [
+          {
+            "node": "Écrire les en-têtes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Écrire les en-têtes": {
+      "main": [
+        [
+          {
+            "node": "Pour chaque onglet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire data/faq.csv": {
+      "main": [
+        [
+          {
+            "node": "Décoder le CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Décoder le CSV": {
+      "main": [
+        [
+          {
+            "node": "Charger la FAQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -25,6 +25,7 @@ services:
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - LLM_PRIMARY_MODEL=${LLM_PRIMARY_MODEL}
       - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL}
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./prompts:/data/prompts:ro
