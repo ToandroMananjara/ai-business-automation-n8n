@@ -1,0 +1,72 @@
+{
+  "categories": [
+    "RENDEZ_VOUS",
+    "SUIVI",
+    "INFORMATION",
+    "RECLAMATION",
+    "CANDIDATURE",
+    "AUTRE"
+  ],
+  "priorities": [
+    "URGENT",
+    "HIGH",
+    "NORMAL",
+    "LOW"
+  ],
+  "primary_intent_order": [
+    "RECLAMATION",
+    "RENDEZ_VOUS",
+    "SUIVI",
+    "INFORMATION",
+    "CANDIDATURE",
+    "AUTRE"
+  ],
+  "team_by_category": {
+    "RENDEZ_VOUS": "TELEOPERATEURS",
+    "INFORMATION": "TELEOPERATEURS",
+    "AUTRE": "TELEOPERATEURS",
+    "SUIVI": "SUIVI_CLIENT",
+    "RECLAMATION": "SUIVI_CLIENT",
+    "CANDIDATURE": "RECRUTEMENT"
+  },
+  "response_delay_hours": {
+    "URGENT": 1,
+    "HIGH": 4,
+    "NORMAL": 24,
+    "LOW": 72
+  },
+  "manual_review": {
+    "categories": [
+      "RECLAMATION",
+      "AUTRE"
+    ],
+    "priorities": [
+      "URGENT"
+    ],
+    "if_ambiguous": true,
+    "if_no_contact": true
+  },
+  "filtering": {
+    "subject_prefixes": [
+      "réponse automatique",
+      "absence du bureau",
+      "absent du bureau",
+      "out of office",
+      "automatic reply",
+      "undeliverable",
+      "delivery status notification",
+      "non remis"
+    ],
+    "sender_local_parts": [
+      "mailer-daemon",
+      "postmaster"
+    ]
+  },
+  "linking": {
+    "window_days": 30,
+    "closed_statuses": [
+      "CLOSED",
+      "FILTERED"
+    ]
+  }
+}

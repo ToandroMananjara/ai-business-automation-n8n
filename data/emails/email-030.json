@@ -1,0 +1,7 @@
+{
+  "message_id": "msg-030",
+  "received_at": "2026-10-08T11:25:00+02:00",
+  "sender": "v.dumas@example.fr",
+  "subject": "Duplicata de facture",
+  "body": "Bonjour,\n\nPlombier Martin est intervenu chez moi en août pour un dégât des eaux. Mon assurance me demande la facture et je ne la retrouve plus. Pourriez-vous m'en envoyer une copie avant vendredi ?\n\nVéronique Dumas"
+}

@@ -28,6 +28,7 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./prompts:/data/prompts:ro
+      - ./config:/data/config:ro
       - ./data:/data/samples:ro
       - ./workflows:/data/workflows
 

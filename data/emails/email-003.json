@@ -1,0 +1,7 @@
+{
+  "message_id": "msg-003",
+  "received_at": "2026-10-07T10:30:00+02:00",
+  "sender": "sophie.benali@example.org",
+  "subject": "Question sur ma facture",
+  "body": "Bonjour,\n\nL'entreprise Électricité Moreau est intervenue chez moi le 28 septembre pour remplacer le tableau électrique. Le travail est propre et je n'ai rien à redire sur l'intervention elle-même.\n\nEn revanche, la facture s'élève à 1 480 euros alors que le devis signé indiquait 1 250 euros, et personne ne m'a prévenue d'un supplément. Pourriez-vous m'expliquer cette différence ?\n\nJe vous remercie par avance pour votre retour.\n\nCordialement,\nSophie Benali"
+}
