@@ -1,0 +1,7 @@
+{
+  "message_id": "msg-001",
+  "received_at": "2026-10-05T09:12:00+02:00",
+  "sender": "marie.lefevre@example.fr",
+  "subject": "Fuite sous l'évier",
+  "body": "Bonjour,\n\nJ'ai une petite fuite sous l'évier de la cuisine, ça goutte un peu quand on utilise le robinet. Rien de grave, j'ai mis une bassine en dessous.\n\nEst-ce qu'un plombier pourrait passer la semaine prochaine ? Je suis disponible plutôt en fin de journée.\n\nVous pouvez me joindre au 06 12 34 56 78.\n\nMerci d'avance,\nMarie Lefèvre"
+}

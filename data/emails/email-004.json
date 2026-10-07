@@ -1,0 +1,7 @@
+{
+  "message_id": "msg-004",
+  "received_at": "2026-10-07T14:05:00+02:00",
+  "sender": "no-reply@formulaire.example.com",
+  "subject": "Nouveau message depuis le formulaire de contact",
+  "body": "Nouveau message reçu via le formulaire du site.\n\nNom : Paul Henry\nMessage : Bonjour, je voudrais un devis pour refaire entièrement ma salle de bain (environ 6 m²). Merci de me rappeler.\n\n---\nCe message a été généré automatiquement, merci de ne pas y répondre."
+}

@@ -1,0 +1,7 @@
+{
+  "message_id": "msg-005",
+  "received_at": "2026-10-08T08:20:00+02:00",
+  "sender": "contact@plomberie-dupont.example.fr",
+  "subject": "Dossier Mme Roux + question",
+  "body": "Bonjour,\n\nJean Dupont, de Dupont Plomberie. Je n'ai toujours pas reçu la confirmation du rendez-vous chez Mme Roux pour le remplacement du chauffe-eau, prévu vendredi. Pouvez-vous me confirmer que c'est bien calé ?\n\nAutre chose : est-ce que votre service prend aussi les appels le samedi matin ? Plusieurs de mes clients me posent la question.\n\nMerci,\nJean Dupont\nDupont Plomberie\n04 72 00 11 22"
+}

@@ -1,0 +1,99 @@
+[
+  {
+    "message_id": "msg-001",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "NORMAL",
+      "customer_name": "Marie Lefèvre",
+      "company": null,
+      "email": "marie.lefevre@example.fr",
+      "phone": "06 12 34 56 78",
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "facile",
+    "trap": "« La semaine prochaine » est vague : requested_date doit rester null, sans inventer de date."
+  },
+  {
+    "message_id": "msg-002",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "URGENT",
+      "customer_name": "Thomas Garnier",
+      "company": null,
+      "email": "t.garnier@example.com",
+      "phone": "07 81 22 45 90",
+      "requested_date": "2026-10-07",
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": true,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "moyen",
+    "trap": "Corps en HTML et signature automatique à nettoyer. « Demain matin » écrit le 6 octobre à 21h47 donne le 7 octobre. Dégât des eaux en cours : URGENT."
+  },
+  {
+    "message_id": "msg-003",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RECLAMATION",
+      "priority": "NORMAL",
+      "customer_name": "Sophie Benali",
+      "company": null,
+      "email": "sophie.benali@example.org",
+      "phone": null,
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": true,
+    "expected_team": "SUIVI_CLIENT",
+    "difficulty": "moyen",
+    "trap": "Réclamation polie, sans mot de colère : elle reste une RECLAMATION. « Électricité Moreau » est l'artisan concerné, pas l'entreprise de la cliente : company doit être null. Le 28 septembre est une date passée : requested_date doit être null."
+  },
+  {
+    "message_id": "msg-004",
+    "expected_filtered": false,
+    "expected": {
+      "category": "RENDEZ_VOUS",
+      "priority": "NORMAL",
+      "customer_name": "Paul Henry",
+      "company": null,
+      "email": null,
+      "phone": null,
+      "requested_date": null,
+      "secondary_requests": [],
+      "ambiguous": false
+    },
+    "expected_manual_review": true,
+    "expected_team": "TELEOPERATEURS",
+    "difficulty": "difficile",
+    "trap": "Expéditeur automatique no-reply : l'adresse ne permet pas de répondre, email doit être null. Le client demande à être rappelé sans donner de numéro : phone doit être null, sans en inventer. Une demande de devis est un RENDEZ_VOUS."
+  },
+  {
+    "message_id": "msg-005",
+    "expected_filtered": false,
+    "expected": {
+      "category": "SUIVI",
+      "priority": "HIGH",
+      "customer_name": "Jean Dupont",
+      "company": "Dupont Plomberie",
+      "email": "contact@plomberie-dupont.example.fr",
+      "phone": "04 72 00 11 22",
+      "requested_date": "2026-10-09",
+      "secondary_requests": [
+        "Le service prend-il les appels le samedi matin ?"
+      ],
+      "ambiguous": false
+    },
+    "expected_manual_review": false,
+    "expected_team": "SUIVI_CLIENT",
+    "difficulty": "difficile",
+    "trap": "Deux demandes : le suivi d'un rendez-vous (intention principale, car SUIVI passe avant INFORMATION dans l'ordre des intentions) et une question sur les horaires, à conserver dans secondary_requests. Ce n'est pas ambigu : chaque demande est claire. C'est un artisan qui écrit : company est renseignée. « Vendredi », écrit le jeudi 8 octobre, donne le 9 octobre, soit moins de 48 heures : HIGH."
+  }
+]
