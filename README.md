@@ -112,7 +112,7 @@ L'export ne contient pas la valeur des credentials, seulement leur nom. Après u
 ├── prompts/          prompts versionnés, lus par les workflows
 ├── data/             données fictives : emails, CV, factures, FAQ
 ├── eval/             jeu d'évaluation, baseline, résultats
-├── scripts/          initialisation, import, export, vérification des étiquettes
+├── scripts/          initialisation, import, export, vérification des étiquettes, envoi d'emails de test
 └── docs/             cahier des charges, fiches de panne, guide utilisateur
 ```
 

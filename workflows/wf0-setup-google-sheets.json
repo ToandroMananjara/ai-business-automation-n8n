@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-07T18:26:23.818Z",
+  "createdAt": "2026-10-07T18:26:23.818Z",
+  "id": "ogVuzmmciNgCN5Qk",
   "name": "WF0 — Mise en place du classeur Google Sheets",
+  "description": null,
+  "active": false,
+  "isArchived": false,
   "nodes": [
     {
       "id": "n01",
@@ -72,17 +78,11 @@
       "name": "Créer l'onglet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
+      "alwaysOutputData": true,
       "position": [
         1120,
         400
       ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "googleApi": {
-          "id": "fshU5mVmgpYUmMeV",
-          "name": "Google Service Account account"
-        }
-      },
       "parameters": {
         "authentication": "serviceAccount",
         "resource": "sheet",
@@ -94,6 +94,12 @@
         },
         "title": "={{ $json.title }}",
         "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
       }
     },
     {
@@ -118,12 +124,6 @@
         1560,
         400
       ],
-      "credentials": {
-        "googleApi": {
-          "id": "fshU5mVmgpYUmMeV",
-          "name": "Google Service Account account"
-        }
-      },
       "parameters": {
         "authentication": "serviceAccount",
         "resource": "sheet",
@@ -145,6 +145,12 @@
           "schema": []
         },
         "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
       }
     },
     {
@@ -152,11 +158,11 @@
       "name": "Lire data/faq.csv",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1.1,
+      "executeOnce": true,
       "position": [
         1120,
         120
       ],
-      "executeOnce": true,
       "parameters": {
         "operation": "read",
         "fileSelector": "/data/samples/faq.csv",
@@ -188,12 +194,6 @@
         1560,
         120
       ],
-      "credentials": {
-        "googleApi": {
-          "id": "fshU5mVmgpYUmMeV",
-          "name": "Google Service Account account"
-        }
-      },
       "parameters": {
         "authentication": "serviceAccount",
         "resource": "sheet",
@@ -217,6 +217,12 @@
           "schema": []
         },
         "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
       }
     }
   ],
@@ -341,5 +347,39 @@
   },
   "settings": {
     "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "5e29466b-40f1-4bad-bae2-06175cdb479c",
+  "activeVersionId": null,
+  "versionCounter": 1,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-07T18:26:23.877Z",
+      "createdAt": "2026-10-07T18:26:23.877Z",
+      "role": "workflow:owner",
+      "workflowId": "ogVuzmmciNgCN5Qk",
+      "projectId": "8IYIFp5bgtuUBkrp",
+      "project": {
+        "updatedAt": "2026-10-07T14:38:21.982Z",
+        "createdAt": "2026-10-07T14:32:21.227Z",
+        "id": "8IYIFp5bgtuUBkrp",
+        "name": "Toandromananjara MAHASALOTRA <mbolakely12345@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "cab2f9d4-666c-41cd-8ac6-935c4e9973dd"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
   }
 }
