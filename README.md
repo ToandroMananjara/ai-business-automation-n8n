@@ -86,6 +86,7 @@ L'export ne contient pas la valeur des credentials, seulement leur nom. Après u
 | Dossier du dépôt | Chemin dans le conteneur | Accès |
 |---|---|---|
 | `prompts/` | `/data/prompts` | lecture seule |
+| `config/` | `/data/config` | lecture seule |
 | `data/` | `/data/samples` | lecture seule |
 | `workflows/` | `/data/workflows` | lecture et écriture |
 
@@ -95,11 +96,12 @@ L'export ne contient pas la valeur des credentials, seulement leur nom. Après u
 .
 ├── docker-compose.yml
 ├── .env.example
+├── config/         règles métier (source unique, lue par n8n et par les scripts)
 ├── workflows/        exports JSON des workflows n8n
 ├── prompts/          prompts versionnés, lus par les workflows
 ├── data/             données fictives : emails, CV, factures, FAQ
 ├── eval/             jeu d'évaluation, baseline, résultats
-├── scripts/          initialisation, import et export
+├── scripts/          initialisation, import, export, vérification des étiquettes
 └── docs/             cahier des charges, fiches de panne, guide utilisateur
 ```
 
