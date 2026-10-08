@@ -1,0 +1,151 @@
+[
+  {
+    "file": "cv/cv-lucas-martin.pdf",
+    "document_type": "cv",
+    "format": "pdf",
+    "expected": {
+      "name": "Lucas Martin",
+      "email": "lucas.martin@example.com",
+      "phone": "06 39 98 64 20",
+      "experience_years": 3.0,
+      "skills_min": 3
+    },
+    "expected_status": "PENDING_REVIEW",
+    "trap": "Cas standard, PDF texte. 24 + 12 mois = 3,0 ans, calculés par le code."
+  },
+  {
+    "file": "cv/cv-ines-robert.docx",
+    "document_type": "cv",
+    "format": "docx",
+    "expected": {
+      "name": "Inès Robert",
+      "email": "ines.robert@example.fr",
+      "phone": "06 39 98 72 41",
+      "experience_years": 0.5,
+      "skills_min": 3
+    },
+    "expected_status": "PENDING_REVIEW",
+    "trap": "Format DOCX : texte lu après décompression du fichier. Stage de 6 mois = 0,5 an."
+  },
+  {
+    "file": "cv/cv-amelie-bernard.pdf",
+    "document_type": "cv",
+    "format": "pdf",
+    "expected": {
+      "name": "Amélie Bernard",
+      "email": "amelie.bernard@example.org",
+      "phone": "04 65 71 40 18",
+      "experience_years": 7.5,
+      "skills_min": 3
+    },
+    "expected_status": "PENDING_REVIEW",
+    "trap": "Deux expériences : 60 + 30 mois = 7,5 ans."
+  },
+  {
+    "file": "cv/cv-karim-said-scan.pdf",
+    "document_type": "cv",
+    "format": "scan",
+    "expected": null,
+    "expected_status": "NEEDS_MANUAL_REVIEW",
+    "trap": "PDF scanné (image) : aucun texte extractible, revue humaine sans appel au LLM."
+  },
+  {
+    "file": "cv/cv-julien-moreau.docx",
+    "document_type": "cv",
+    "format": "docx",
+    "expected": {
+      "name": "Julien Moreau",
+      "email": null,
+      "phone": "06 39 98 35 62",
+      "experience_years": 3.0,
+      "skills_min": 2
+    },
+    "expected_status": "NEEDS_MANUAL_REVIEW",
+    "trap": "Aucun email dans le CV : email null (rien d'inventé), revue humaine."
+  },
+  {
+    "file": "invoices/facture-F-2026-0142.pdf",
+    "document_type": "invoice",
+    "format": "pdf",
+    "expected": {
+      "supplier": "Fournitures Exemple SAS",
+      "invoice_number": "F-2026-0142",
+      "invoice_date": "2026-09-30",
+      "due_date": "2026-10-30",
+      "amount_excl_tax": 1000.0,
+      "tax_amount": 200.0,
+      "amount_incl_tax": 1200.0,
+      "currency": "EUR"
+    },
+    "expected_status": "PENDING_REVIEW",
+    "trap": "Cas standard."
+  },
+  {
+    "file": "invoices/facture-F-2026-0157.pdf",
+    "document_type": "invoice",
+    "format": "pdf",
+    "expected": {
+      "supplier": "Électricité Pro Exemple",
+      "invoice_number": "F-2026-0157",
+      "invoice_date": "2026-10-02",
+      "due_date": "2026-11-01",
+      "amount_excl_tax": 845.5,
+      "tax_amount": 169.1,
+      "amount_incl_tax": 1014.6,
+      "currency": "EUR"
+    },
+    "expected_status": "PENDING_REVIEW",
+    "trap": "Mise en page différente, montants avec centimes."
+  },
+  {
+    "file": "invoices/facture-FA-889.pdf",
+    "document_type": "invoice",
+    "format": "pdf",
+    "expected": {
+      "supplier": "Plomberie Dépôt Exemple",
+      "invoice_number": "FA-889",
+      "invoice_date": "2026-10-05",
+      "due_date": "2026-10-20",
+      "amount_excl_tax": 312.4,
+      "tax_amount": 31.24,
+      "amount_incl_tax": 353.64,
+      "currency": "EUR"
+    },
+    "expected_status": "NEEDS_MANUAL_REVIEW",
+    "trap": "Total faux : 312,40 + 31,24 = 343,64 et non 353,64. Le LLM doit recopier les montants tels quels ; le contrôle du code doit détecter l'erreur."
+  },
+  {
+    "file": "invoices/facture-CD-2026-77.pdf",
+    "document_type": "invoice",
+    "format": "pdf",
+    "expected": {
+      "supplier": "Chauffage Distribution Exemple",
+      "invoice_number": "CD-2026-77",
+      "invoice_date": "2026-09-15",
+      "due_date": "2026-10-15",
+      "amount_excl_tax": 2450.0,
+      "tax_amount": 134.75,
+      "amount_incl_tax": 2584.75,
+      "currency": "EUR"
+    },
+    "expected_status": "PENDING_REVIEW",
+    "trap": "Dates en toutes lettres, symbole € au lieu de EUR, espaces dans les milliers."
+  },
+  {
+    "file": "invoices/facture-X-12.pdf",
+    "document_type": "invoice",
+    "format": "pdf",
+    "expected": {
+      "supplier": "Outillage Exemple SARL",
+      "invoice_number": "X-12",
+      "invoice_date": "2026-10-01",
+      "due_date": "2026-09-01",
+      "amount_excl_tax": 150.0,
+      "tax_amount": 30.0,
+      "amount_incl_tax": 180.0,
+      "currency": "EUR"
+    },
+    "expected_status": "NEEDS_MANUAL_REVIEW",
+    "trap": "Échéance antérieure à la date de facture : le LLM doit recopier, le contrôle du code doit rejeter."
+  }
+]
