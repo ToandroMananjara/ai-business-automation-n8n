@@ -1,0 +1,7 @@
+{
+  "message_id": "msg-019",
+  "received_at": "2026-10-07T13:30:00+02:00",
+  "sender": "p.leroy@example.org",
+  "subject": "Changement de date",
+  "body": "Bonjour,\n\nJ'ai un rendez-vous avec l'électricien le jeudi 15 octobre pour la pose des luminaires. Je ne serai finalement pas là ce jour-là : serait-il possible de le décaler au mardi 20 octobre, à la même heure ?\n\nMerci,\nPauline Leroy\n06 39 98 26 93"
+}

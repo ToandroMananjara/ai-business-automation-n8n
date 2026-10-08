@@ -1,0 +1,23 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+credentials/
+
+# Données locales des conteneurs
+n8n_data/
+
+# Système et éditeurs
+.DS_Store
+.vscode/
+.idea/
+
+# Node
+node_modules/
+
+# Sorties brutes d'évaluation (seul eval/results.md est versionné)
+eval/runs/
+
+# Python
+__pycache__/

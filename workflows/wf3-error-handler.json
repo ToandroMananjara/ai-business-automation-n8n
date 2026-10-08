@@ -1,0 +1,177 @@
+{
+  "updatedAt": "2026-10-07T20:23:16.447Z",
+  "createdAt": "2026-10-07T20:20:33.076Z",
+  "id": "dTir5YmlNp369L4p",
+  "name": "WF3 — Gestion des erreurs",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "c1260f05-4345-5aca-8c73-b5089c138075",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Le node Error Trigger reçoit, pour chaque exécution en échec d'un workflow\n// qui a désigné le WF3 comme « error workflow » :\n// { execution: { id, url, error: { message, description }, lastNodeExecuted, mode }, workflow: { id, name } }\nconst execution = $json.execution || {};\nconst error = execution.error || {};\nconst node = execution.lastNodeExecuted || error.node?.name || '';\nconst message = [error.message, error.description].filter(Boolean).join(' — ') || 'Erreur sans message';\nconst text = `${message} ${node}`.toLowerCase();\n\n// Un type lisible, pour trier le journal et adapter la réaction.\nlet type = 'AUTRE';\nif (/429|rate limit|quota|too many requests/.test(text)) type = 'QUOTA_LLM';\nelse if (/groq|gemini|generativelanguage|classifier|rédiger/.test(text)) type = 'LLM_INDISPONIBLE';\nelse if (/sheets|spreadsheet|googleapis|tickets|faq|écrire le ticket/.test(text)) type = 'GOOGLE_SHEETS';\nelse if (/champ obligatoire|received_at invalide/.test(text)) type = 'REQUETE_INVALIDE';\n\nreturn [{ json: {\n  timestamp: $now.toISO(),\n  workflow: $json.workflow?.name || '',\n  execution_id: execution.id || '',\n  node,\n  error_type: type,\n  error_message: message.slice(0, 500),\n  input_ref: execution.url || '',\n  status: 'OPEN',\n} }];\n"
+      },
+      "id": "79b5c44d-d882-5dba-8ec1-a78ce73341bf",
+      "name": "Formater l'erreur",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "=errors",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5e71a6d5-be1e-50bc-adee-0631a09930ee",
+      "name": "Journaliser dans errors",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        304
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#alertes"
+        },
+        "text": "=*Panne dans {{ $('Formater l\\'erreur').first().json.workflow }}*\nNode : {{ $('Formater l\\'erreur').first().json.node }}\nType : {{ $('Formater l\\'erreur').first().json.error_type }}\nMessage : {{ $('Formater l\\'erreur').first().json.error_message }}\nExécution : {{ $('Formater l\\'erreur').first().json.input_ref }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "9a6df510-d6a9-5196-8449-80d1194fd1d7",
+      "name": "Prévenir sur Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        304
+      ],
+      "webhookId": "7fd59039-8861-4707-bf8a-35454002066a",
+      "credentials": {
+        "slackApi": {
+          "id": "TwV4oQFIGLHeLs9f",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Formater l'erreur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formater l'erreur": {
+      "main": [
+        [
+          {
+            "node": "Journaliser dans errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Journaliser dans errors": {
+      "main": [
+        [
+          {
+            "node": "Prévenir sur Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "c1ad4a35-ca7c-40a2-ab85-2a41ced867e5",
+  "activeVersionId": "b6c39626-c0e6-4918-9844-af85ba8761aa",
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-07T20:20:33.089Z",
+      "createdAt": "2026-10-07T20:20:33.089Z",
+      "role": "workflow:owner",
+      "workflowId": "dTir5YmlNp369L4p",
+      "projectId": "8IYIFp5bgtuUBkrp",
+      "project": {
+        "updatedAt": "2026-10-07T14:38:21.982Z",
+        "createdAt": "2026-10-07T14:32:21.227Z",
+        "id": "8IYIFp5bgtuUBkrp",
+        "name": "Toandromananjara MAHASALOTRA <mbolakely12345@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "cab2f9d4-666c-41cd-8ac6-935c4e9973dd"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

@@ -1,0 +1,37 @@
+name: ai-business-automation
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-latest}
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      # Exposé uniquement sur la machine locale.
+      - "127.0.0.1:5678:5678"
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY manquant dans .env}
+      - GENERIC_TIMEZONE=${TIMEZONE:-Europe/Paris}
+      - TZ=${TIMEZONE:-Europe/Paris}
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_WEBHOOK_URL=http://localhost:5678/
+      - N8N_SECURE_COOKIE=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
+      # Les nodes de lecture de fichiers n'ont accès qu'à /data.
+      - N8N_RESTRICT_FILE_ACCESS_TO=/data
+      # Valeurs lisibles depuis les workflows via $env.
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - LLM_PRIMARY_MODEL=${LLM_PRIMARY_MODEL}
+      - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL}
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./prompts:/data/prompts:ro
+      - ./config:/data/config:ro
+      - ./data:/data/samples:ro
+      - ./workflows:/data/workflows
+
+volumes:
+  n8n_data:

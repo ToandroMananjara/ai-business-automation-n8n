@@ -1,0 +1,990 @@
+{
+  "updatedAt": "2026-10-07T20:35:27.889Z",
+  "createdAt": "2026-10-07T19:17:46.680Z",
+  "id": "BMkRNgzkAE6NNaEx",
+  "name": "WF1 — Traitement des demandes",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "9fe39895-abff-52da-8b58-489253311f3d",
+      "name": "Webhook",
+      "webhookId": "e35cb373-1f48-5bcf-886f-b9e823784c5a",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "requests",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "XppoAxtDzsEHfIjN",
+          "name": "Webhook X-Api-Key"
+        }
+      }
+    },
+    {
+      "id": "d9ba2639-6d02-5041-be54-39d6841fc171",
+      "name": "Lire la configuration",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/{config/business_rules.json,prompts/classify_extract.md,prompts/draft_response.md}",
+        "options": {}
+      }
+    },
+    {
+      "id": "86353b97-e15c-55b1-974f-9092fd10b151",
+      "name": "Charger la configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Les 3 fichiers lus juste avant : les règles métier et les deux prompts.\n// Ils sont relus à chaque email : modifier un prompt ou une règle ne demande\n// aucune modification du workflow.\nconst files = {};\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const buffer = await this.helpers.getBinaryDataBuffer(i, 'data');\n  files[items[i].binary.data.fileName] = buffer.toString('utf8');\n}\n\nconst rules = JSON.parse(files['business_rules.json']);\n\n// Les listes de valeurs du prompt viennent de la configuration (source unique).\nlet classify = files['classify_extract.md'];\nfor (const key of ['categories', 'priorities', 'primary_intent_order']) {\n  classify = classify.replaceAll(`{{${key}}}`, rules[key].map(v => '`' + v + '`').join(', '));\n}\n\nreturn [{ json: { rules, prompts: { classify, draft: files['draft_response.md'] } } }];\n"
+      }
+    },
+    {
+      "id": "e9d850ff-872f-5cfc-b551-38314e46038e",
+      "name": "Normaliser l'email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Met l'email reçu au format de travail : texte brut, date de réception,\n// et message prêt à envoyer au modèle (avec un calendrier des 14 jours suivants).\nconst body = $('Webhook').first().json.body;\nfor (const field of ['message_id', 'received_at', 'sender', 'subject', 'body']) {\n  if (!body[field]) throw new Error(`Champ obligatoire manquant dans la requête : ${field}`);\n}\nconst received = DateTime.fromISO(body.received_at, { setZone: true });\nif (!received.isValid) throw new Error(`received_at invalide : ${body.received_at}`);\n\nconst WEEKDAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];\nconst MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',\n                'septembre', 'octobre', 'novembre', 'décembre'];\n\nconst bodyText = body.body\n  .replace(/<br\\s*\\/?>|<\\/div>|<\\/p>/gi, '\\n')       // fins de ligne HTML\n  .replace(/<[^>]+>/g, '')                           // autres balises HTML\n  .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')\n  .replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\")\n  .replace(/^--\\s*\\n(envoyé depuis|sent from).*$/gim, '') // signature d'envoi mobile\n  .replace(/[ \\t]+/g, ' ')\n  .replace(/\\n\\s*\\n\\s*\\n+/g, '\\n\\n')\n  .trim();\n\n// Le modèle lit la date dans ce calendrier au lieu de la calculer.\nconst calendar = [];\nfor (let offset = 0; offset <= 14; offset++) {\n  const day = received.startOf('day').plus({ days: offset });\n  const label = offset === 0 ? \" (aujourd'hui)\" : offset === 1 ? ' (demain)' : '';\n  calendar.push(`- ${WEEKDAYS[day.weekday - 1]} ${day.day} ${MONTHS[day.month - 1]} = ${day.toISODate()}${label}`);\n}\n\nconst userMessage =\n  `Date de réception : ${body.received_at} (${WEEKDAYS[received.weekday - 1]})\\n` +\n  `Calendrier des jours suivants :\\n${calendar.join('\\n')}\\n` +\n  `Expéditeur : ${body.sender}\\n` +\n  `Objet : ${body.subject}\\n` +\n  `Message :\\n${bodyText}`;\n\nreturn [{ json: {\n  message_id: body.message_id,\n  received_at: body.received_at,\n  sender: body.sender,\n  subject: body.subject,\n  body_text: bodyText,\n  attachments: (body.attachments || []).map(a => ({ filename: a.filename, mime_type: a.mime_type })),\n  test_run: body.test_run || '',\n  user_message: userMessage,\n} }];\n"
+      }
+    },
+    {
+      "id": "441bcc95-3a4a-5050-b414-3deda6083fa9",
+      "name": "Filtrer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Écarte, avant tout appel au LLM, les réponses automatiques et les erreurs de distribution.\n// Les règles sont dans config/business_rules.json (clé filtering).\nconst email = $json;\nconst rules = $('Charger la configuration').first().json.rules.filtering;\nconst subject = email.subject.trim().toLowerCase();\nconst localPart = email.sender.split('@')[0].toLowerCase();\n\nconst prefix = rules.subject_prefixes.find(p => subject.startsWith(p));\nconst daemon = rules.sender_local_parts.includes(localPart);\n\nconst reason = prefix ? `Réponse automatique (objet commençant par « ${prefix} »)`\n  : daemon ? `Erreur de distribution (expéditeur ${localPart})` : '';\n\nreturn [{ json: { ...email, filtered: Boolean(reason), filter_reason: reason } }];\n"
+      }
+    },
+    {
+      "id": "4fd6b574-bc4e-589b-b5ef-6f8e8b59b263",
+      "name": "Email filtré ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2e09f9f1-5adf-5cb5-9091-3635774fe4b7",
+              "leftValue": "={{ $json.filtered }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "975db738-1270-55d8-bbc6-f46a846c4b72",
+      "name": "Préparer la classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        460
+      ],
+      "parameters": {
+        "jsCode": "// Construit la requête envoyée au modèle principal (Groq) et celle du secours (Gemini).\n// Si l'item vient de « Relancer ? », on ajoute l'erreur de la réponse précédente.\nconst config = $('Charger la configuration').first().json;\nconst email = $('Filtrer').first().json;\nconst attempt = $json.retry_error ? $json.attempt + 1 : 1;\n\nconst messages = [\n  { role: 'system', content: config.prompts.classify },\n  { role: 'user', content: email.user_message },\n];\nif ($json.retry_error) {\n  messages.push({ role: 'user', content:\n    `Ta réponse précédente était invalide : ${$json.retry_error}. ` +\n    `Réponds uniquement par l'objet JSON demandé, avec les valeurs autorisées.` });\n}\n\n// JSON simple (json_object) et non strict : en mode json_schema, Groq tronque les\n// textes longs de ce modèle (voir eval/model-selection.md). Le code valide le format.\nconst base = { temperature: 0, max_completion_tokens: 1500, response_format: { type: 'json_object' }, messages };\nreturn [{ json: {\n  attempt,\n  request: { ...base, model: $env.LLM_PRIMARY_MODEL, reasoning_effort: 'none' },\n  fallback_request: { ...base, model: $env.LLM_FALLBACK_MODEL },\n} }];\n"
+      }
+    },
+    {
+      "id": "b1078fa2-392b-584c-8b11-bc18cbd8ba83",
+      "name": "Classifier (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "position": [
+        1560,
+        460
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ai-business-automation-n8n/0.1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "groqApi": {
+          "id": "qVi1FFao4B95b1EL",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "id": "44d03f50-277b-5c4e-8237-4a1a91a38953",
+      "name": "Classifier (Gemini, secours)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "position": [
+        1780,
+        620
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ai-business-automation-n8n/0.1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Préparer la classification').first().json.fallback_request) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gS1vW7gJeHgzIHaA",
+          "name": "Gemini API"
+        }
+      }
+    },
+    {
+      "id": "1b59e826-ff60-5484-aa61-70d406470a54",
+      "name": "Lire la qualification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        460
+      ],
+      "parameters": {
+        "jsCode": "// Lit la réponse du modèle (Groq ou Gemini) et vérifie qu'elle respecte le format attendu.\n// Le LLM extrait ; ici, le code contrôle.\nconst rules = $('Charger la configuration').first().json.rules;\nconst prepared = $('Préparer la classification').first().json;   // dernier passage\nconst email = $('Filtrer').first().json;\nconst response = $json;\nconst content = response.choices?.[0]?.message?.content || '';\n\nconst REQUIRED = ['category', 'priority', 'customer_name', 'company', 'email', 'phone',\n                  'requested_date', 'secondary_requests', 'summary', 'ambiguous'];\nlet q = null;\nlet error = '';\n// Item venu de la sortie d'erreur du secours : Groq et Gemini sont tous deux en panne.\nconst providerDown = Boolean(response.error);\nif (providerDown) {\n  // Le message d'erreur brut des API contient souvent du JSON : on n'en garde que la phrase utile.\n  const raw = String(response.error.description || response.error.message || '');\n  const short = (raw.match(/\\\\?\"message\\\\?\":\\s*\\\\?\"([^\"\\\\]+)/) || [])[1] || raw;\n  error = `LLM indisponible (Groq et Gemini) : ${short.slice(0, 200)}`;\n} else {\n  try {\n    q = JSON.parse(content.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, ''));\n  } catch (e) {\n    error = `JSON invalide (${e.message})`;\n  }\n}\nif (q) {\n  const missing = REQUIRED.filter(key => !(key in q));\n  if (missing.length) error = `champs manquants : ${missing.join(', ')}`;\n  else if (!rules.categories.includes(q.category)) error = `catégorie non autorisée : ${q.category}`;\n  else if (!rules.priorities.includes(q.priority)) error = `priorité non autorisée : ${q.priority}`;\n  else if (!Array.isArray(q.secondary_requests)) error = 'secondary_requests doit être une liste';\n  else if (typeof q.summary !== 'string' || !q.summary.trim()) error = 'résumé vide';\n  else if (q.email && !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(q.email)) error = `email invalide : ${q.email}`;\n  else if (q.requested_date) {\n    const requested = DateTime.fromISO(q.requested_date);\n    const received = DateTime.fromISO(email.received_at, { setZone: true });\n    if (!requested.isValid) error = `date invalide : ${q.requested_date}`;\n    else if (requested < received.startOf('day')) error = `date passée : ${q.requested_date}`;\n  }\n}\n\nreturn [{ json: {\n  valid: !error,\n  provider_down: providerDown,\n  retry_error: error,\n  attempt: prepared.attempt,\n  model: response.model || '',\n  qualification: error ? null : q,\n  usage: response.usage || {},\n} }];\n"
+      }
+    },
+    {
+      "id": "619b7972-3fc0-52a5-b5b3-85b6e47fb385",
+      "name": "Relancer ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2220,
+        460
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "eb49ab2e-6bbe-57e7-8233-657528dfff24",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "3890f136-ba49-5da1-89ff-5ab5188e9ea8",
+              "leftValue": "={{ $json.attempt }}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            },
+            {
+              "id": "0dc32626-2967-5503-9167-339c402baaba",
+              "leftValue": "={{ $json.provider_down }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ef3274b0-3b1f-5e8b-90f7-3808864a5266",
+      "name": "Lire les tickets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "position": [
+        2460,
+        560
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "tickets"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "id": "176ea7c4-fa68-5d47-91da-51b8139bce1a",
+      "name": "Appliquer les règles métier",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2680,
+        560
+      ],
+      "parameters": {
+        "jsCode": "// Toutes les décisions sont prises ici, par des règles écrites (config/business_rules.json) :\n// rattachement, priorité, revue humaine, équipe, échéance de réponse.\nconst rules = $('Charger la configuration').first().json.rules;\nconst email = $('Filtrer').first().json;\nconst result = $('Lire la qualification').first().json;   // dernier passage, après relance éventuelle\nconst received = DateTime.fromISO(email.received_at, { setZone: true });\nconst reasons = [];\n\nlet q = result.qualification;\nif (result.provider_down) {\n  reasons.push(result.retry_error);   // la demande est gardée, statut ERROR, traitée à la main\n} else if (!result.valid) {\n  reasons.push(`Sortie du modèle inexploitable après ${result.attempt} essai(s) : ${result.retry_error}`);\n}\nif (!result.valid) {\n  // Pas de qualification : on garde au moins l'expéditeur et l'objet pour que l'agent sache qui a écrit.\n  q = { category: 'AUTRE', priority: 'NORMAL', customer_name: null, company: null, email: email.sender, phone: null,\n        requested_date: null, secondary_requests: [], summary: `Non qualifié. Objet : ${email.subject}`, ambiguous: false };\n}\n\nconst ORDER = rules.priorities;   // du plus urgent au moins urgent\nconst raise = (current, minimum) => (ORDER.indexOf(current) > ORDER.indexOf(minimum) ? minimum : current);\nlet priority = q.priority;\n\n// 1. Rattachement : un ticket encore ouvert du même client (même email ou même téléphone)\nconst digits = value => String(value || '').replace(/\\D/g, '');\nconst since = received.minus({ days: rules.linking.window_days });\nconst related = $input.all()\n  .map(item => item.json)\n  .filter(t => t.ticket_id && !rules.linking.closed_statuses.includes(t.status))\n  .filter(t => String(t.test_run || '') === email.test_run)      // les tests ne se mélangent pas\n  .filter(t => DateTime.fromISO(String(t.received_at), { setZone: true }) >= since)\n  .filter(t => (q.email && t.email && String(t.email).toLowerCase() === q.email.toLowerCase())\n            || (q.phone && digits(t.phone) && digits(t.phone) === digits(q.phone)))\n  .sort((a, b) => (String(a.received_at) < String(b.received_at) ? 1 : -1))[0];\nif (related) priority = raise(priority, 'HIGH');                 // un client qui relance\n\n// 2. Échéance proche : filet de sécurité sur le calcul de dates du modèle\nconst escalation = rules.deadline_escalation;\nif (q.requested_date) {\n  const requested = DateTime.fromISO(q.requested_date, { zone: received.zone });\n  if (requested.diff(received, 'hours').hours < escalation.within_hours) {\n    priority = raise(priority, escalation.min_priority);\n  }\n}\n\n// 3. Revue humaine obligatoire (seulement si la qualification est valide : sinon la raison est déjà connue)\nconst review = rules.manual_review;\nif (result.valid) {\n  if (review.categories.includes(q.category)) {\n    reasons.push(q.category === 'RECLAMATION' ? 'Réclamation : réponse à rédiger par un humain' : 'Demande non reconnue');\n  }\n  if (review.priorities.includes(priority)) reasons.push('Urgence : traitement immédiat par un humain');\n  if (review.if_ambiguous && q.ambiguous) reasons.push('Intention principale impossible à déterminer');\n  if (review.if_no_contact && !q.email && !q.phone) reasons.push('Aucun moyen de recontacter le client');\n}\n\n// 4. Routage et échéance de réponse\nreturn [{ json: {\n  qualification: { ...q, priority },\n  team: rules.team_by_category[q.category],\n  due_at: received.plus({ hours: rules.response_delay_hours[priority] }).toISO(),\n  related_ticket_id: related ? related.ticket_id : '',\n  status: result.provider_down ? 'ERROR' : reasons.length ? 'NEEDS_MANUAL_REVIEW' : 'PENDING_REVIEW',\n  review_reason: reasons.join(' ; '),\n  model: result.model,\n} }];\n"
+      }
+    },
+    {
+      "id": "5e32f0c6-bbfe-5dd0-99f1-3bec767bb2d2",
+      "name": "Brouillon nécessaire ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2900,
+        560
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6a1df230-e310-59d9-852b-51793527833f",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "PENDING_REVIEW",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "083720b9-b4af-552d-aba0-43c3c82c53cb",
+      "name": "Lire la FAQ",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "executeOnce": true,
+      "position": [
+        3140,
+        460
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "faq"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "id": "08773ba1-d7b9-5eca-a3c4-6f43a379f029",
+      "name": "Préparer le brouillon",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        460
+      ],
+      "parameters": {
+        "jsCode": "// Le brouillon ne s'appuie que sur la FAQ : les entrées de la catégorie principale,\n// plus toujours les questions générales (pour répondre aux demandes secondaires).\nconst config = $('Charger la configuration').first().json;\nconst email = $('Filtrer').first().json;\nconst q = $('Appliquer les règles métier').first().json.qualification;\n\nconst entries = $input.all().map(item => item.json)\n  .filter(e => e.id && [q.category, 'INFORMATION'].includes(e.category));\nconst faqBlock = entries.map(e => `[${e.id}] ${e.question} — ${e.answer}`).join('\\n');\nconst secondary = q.secondary_requests.length ? q.secondary_requests.join(' ; ') : 'aucune';\n\nconst user =\n  `Email du client :\\nObjet : ${email.subject}\\n${email.body_text}\\n\\n` +\n  `Qualification : catégorie ${q.category} ; nom : ${q.customer_name || 'inconnu'} ; ` +\n  `demandes secondaires : ${secondary}\\n\\n` +\n  `Entrées de FAQ fournies :\\n${faqBlock}\\n\\n` +\n  `Rappel : rédige le brouillon dans la langue de l'email du client, même si la FAQ est en français.`;\n\nconst base = { temperature: 0, max_completion_tokens: 1500, response_format: { type: 'json_object' },\n  messages: [{ role: 'system', content: config.prompts.draft }, { role: 'user', content: user }] };\nreturn [{ json: {\n  entries,\n  request: { ...base, model: $env.LLM_PRIMARY_MODEL, reasoning_effort: 'none' },\n  fallback_request: { ...base, model: $env.LLM_FALLBACK_MODEL },\n} }];\n"
+      }
+    },
+    {
+      "id": "18218492-9f22-5e4f-8062-1fb71ec79e17",
+      "name": "Rédiger (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "position": [
+        3580,
+        460
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ai-business-automation-n8n/0.1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "groqApi": {
+          "id": "qVi1FFao4B95b1EL",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "id": "0d43c60c-9a4c-5de1-b4b2-1069b151dc46",
+      "name": "Rédiger (Gemini, secours)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "position": [
+        3800,
+        620
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ai-business-automation-n8n/0.1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Préparer le brouillon').first().json.fallback_request) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gS1vW7gJeHgzIHaA",
+          "name": "Gemini API"
+        }
+      }
+    },
+    {
+      "id": "e9876a5d-5972-5528-8c4b-a1953e214062",
+      "name": "Contrôler le brouillon",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4020,
+        460
+      ],
+      "parameters": {
+        "jsCode": "// Trois contrôles déterministes, avant de proposer le brouillon à un agent :\n// citations de FAQ existantes, aucun nombre inventé, signature présente.\nconst prepared = $('Préparer le brouillon').first().json;\nconst q = $('Appliquer les règles métier').first().json.qualification;\nconst email = $('Filtrer').first().json;\nconst content = $json.choices?.[0]?.message?.content || '';\n\nlet draft = null;\nlet problem = '';\nif ($json.error) {\n  const raw = String($json.error.description || $json.error.message || '');\n  const short = (raw.match(/\\\\?\"message\\\\?\":\\s*\\\\?\"([^\"\\\\]+)/) || [])[1] || raw;\n  problem = `LLM indisponible pour le brouillon (Groq et Gemini) : ${short.slice(0, 200)}`;\n} else {\n  try {\n    draft = JSON.parse(content.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, ''));\n  } catch (e) {\n    problem = 'brouillon illisible (JSON invalide)';\n  }\n}\nif (draft && (typeof draft.draft !== 'string' || !draft.draft.trim())) problem = 'brouillon vide';\n\nconst checks = [];\nif (draft && !problem) {\n  const cited = Array.isArray(draft.faq_ids_used) ? draft.faq_ids_used : [];\n  const provided = new Set(prepared.entries.map(e => e.id));\n  const invalid = cited.filter(id => !provided.has(id));\n  if (invalid.length) checks.push(`citations inexistantes : ${invalid.join(', ')}`);\n\n  // Chaque nombre du brouillon doit exister dans l'email, la qualification ou les entrées citées.\n  const used = prepared.entries.filter(e => cited.includes(e.id));\n  const sources = [email.subject, email.body_text, JSON.stringify(q), ...used.map(e => `${e.question} ${e.answer}`)].join(' ');\n  const known = new Set(sources.match(/\\d+/g) || []);\n  const unsupported = [...new Set(draft.draft.match(/\\d+/g) || [])].filter(n => !known.has(n));\n  if (unsupported.length) checks.push(`nombres non sourcés : ${unsupported.join(', ')}`);\n\n  if (!/(Le service client|Customer Service)\\s*$/.test(draft.draft.trim())) {\n    checks.push('signature absente (texte peut-être tronqué)');\n  }\n}\n\nreturn [{ json: {\n  draft_response: draft?.draft || '',\n  draft_faq_ids: (draft?.faq_ids_used || []).join(', '),\n  draft_unanswered: (draft?.unanswered || []).join(' | '),\n  draft_model: $json.model || '',\n  draft_check: problem || checks.join(' ; '),\n} }];\n"
+      }
+    },
+    {
+      "id": "ac4bb763-c2e3-559f-a01f-2b718a08863f",
+      "name": "Composer le ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4260,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Assemble la ligne de l'onglet tickets, quel que soit le chemin suivi\n// (email filtré, revue obligatoire, ou brouillon proposé).\nconst email = $('Filtrer').first().json;\nconst base = {\n  ticket_id: `T-${$execution.id}`,\n  message_id: email.message_id,\n  received_at: email.received_at,\n  processed_at: $now.toISO(),\n  execution_id: $execution.id,\n  test_run: email.test_run,\n};\nif (email.filtered) {\n  return [{ json: { ...base, status: 'FILTERED', review_reason: email.filter_reason } }];\n}\n\nconst decision = $('Appliquer les règles métier').first().json;\nconst q = decision.qualification;\nlet status = decision.status;\nlet reason = decision.review_reason;\nlet draft = {};\nif ($('Contrôler le brouillon').isExecuted) {\n  draft = $('Contrôler le brouillon').first().json;\n  if (draft.draft_check) {\n    status = 'NEEDS_MANUAL_REVIEW';\n    reason = `Brouillon rejeté par les contrôles : ${draft.draft_check}`;\n  }\n}\n\nreturn [{ json: {\n  ...base,\n  related_ticket_id: decision.related_ticket_id,\n  customer_name: q.customer_name ?? '',\n  company: q.company ?? '',\n  email: q.email ?? '',\n  phone: q.phone ?? '',\n  category: q.category,\n  priority: q.priority,\n  requested_date: q.requested_date ?? '',\n  secondary_requests: (q.secondary_requests || []).join(' | '),\n  summary: q.summary,\n  ambiguous: q.ambiguous,\n  team: decision.team,\n  due_at: decision.due_at,\n  status,\n  review_reason: reason,\n  draft_response: draft.draft_response || '',\n  draft_faq_ids: draft.draft_faq_ids || '',\n  draft_unanswered: draft.draft_unanswered || '',\n  draft_outcome: '',\n  model: [decision.model, draft.draft_model].filter(Boolean).join(' / '),\n} }];\n"
+      }
+    },
+    {
+      "id": "f2c1e36d-16d7-5367-a66f-ff701d592f6b",
+      "name": "Écrire le ticket",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4480,
+        300
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "tickets"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "handlingExtraData": "insertInNewColumn"
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "id": "435e1301-3c67-5525-9cd3-f1c0f2e3c630",
+      "name": "Prévenir l'équipe ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4700,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "08036a87-cc12-5d4d-94aa-e18425e8629d",
+              "leftValue": "={{ (() => { const t = $('Composer le ticket').first().json; return (t.priority === 'URGENT' || t.status === 'ERROR') && !t.test_run; })() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "74051694-1888-5f0c-a28f-fe031caf3a6e",
+      "name": "Prévenir sur Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "onError": "continueRegularOutput",
+      "position": [
+        4920,
+        200
+      ],
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#alertes"
+        },
+        "messageType": "text",
+        "text": "={{ (() => { const t = $('Composer le ticket').first().json; const head = t.status === 'ERROR' ? '*Demande non qualifiée : LLM indisponible*' : '*Demande urgente*'; return [head, `Ticket : ${t.ticket_id} (équipe ${t.team})`, `Client : ${t.customer_name || 'inconnu'} ${t.phone ? '- ' + t.phone : ''} ${t.email ? '- ' + t.email : ''}`, `Résumé : ${t.summary}`, `Échéance de réponse : ${t.due_at}`].join('\\n'); })() }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "TwV4oQFIGLHeLs9f",
+          "name": "Slack account"
+        }
+      },
+      "webhookId": "51dcdc67-54eb-40ae-bc99-5df4c26db1c1"
+    },
+    {
+      "id": "575f6522-9cf1-52fd-9a44-3cac3e5ea765",
+      "name": "Répondre",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        5140,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Composer le ticket').first().json) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Lire la configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire la configuration": {
+      "main": [
+        [
+          {
+            "node": "Charger la configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Charger la configuration": {
+      "main": [
+        [
+          {
+            "node": "Normaliser l'email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normaliser l'email": {
+      "main": [
+        [
+          {
+            "node": "Filtrer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrer": {
+      "main": [
+        [
+          {
+            "node": "Email filtré ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email filtré ?": {
+      "main": [
+        [
+          {
+            "node": "Composer le ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Préparer la classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer la classification": {
+      "main": [
+        [
+          {
+            "node": "Classifier (Groq)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classifier (Groq)": {
+      "main": [
+        [
+          {
+            "node": "Lire la qualification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classifier (Gemini, secours)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classifier (Gemini, secours)": {
+      "main": [
+        [
+          {
+            "node": "Lire la qualification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lire la qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire la qualification": {
+      "main": [
+        [
+          {
+            "node": "Relancer ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Relancer ?": {
+      "main": [
+        [
+          {
+            "node": "Préparer la classification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lire les tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire les tickets": {
+      "main": [
+        [
+          {
+            "node": "Appliquer les règles métier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Appliquer les règles métier": {
+      "main": [
+        [
+          {
+            "node": "Brouillon nécessaire ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brouillon nécessaire ?": {
+      "main": [
+        [
+          {
+            "node": "Lire la FAQ",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Composer le ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire la FAQ": {
+      "main": [
+        [
+          {
+            "node": "Préparer le brouillon",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer le brouillon": {
+      "main": [
+        [
+          {
+            "node": "Rédiger (Groq)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rédiger (Groq)": {
+      "main": [
+        [
+          {
+            "node": "Contrôler le brouillon",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rédiger (Gemini, secours)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rédiger (Gemini, secours)": {
+      "main": [
+        [
+          {
+            "node": "Contrôler le brouillon",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Contrôler le brouillon",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contrôler le brouillon": {
+      "main": [
+        [
+          {
+            "node": "Composer le ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Composer le ticket": {
+      "main": [
+        [
+          {
+            "node": "Écrire le ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Écrire le ticket": {
+      "main": [
+        [
+          {
+            "node": "Prévenir l'équipe ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prévenir l'équipe ?": {
+      "main": [
+        [
+          {
+            "node": "Prévenir sur Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Répondre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prévenir sur Slack": {
+      "main": [
+        [
+          {
+            "node": "Répondre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "dTir5YmlNp369L4p"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "39b9db40-cd9d-464e-9a69-39a870de7006",
+  "activeVersionId": "39b9db40-cd9d-464e-9a69-39a870de7006",
+  "versionCounter": 6,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-07T19:17:46.722Z",
+      "createdAt": "2026-10-07T19:17:46.722Z",
+      "role": "workflow:owner",
+      "workflowId": "BMkRNgzkAE6NNaEx",
+      "projectId": "8IYIFp5bgtuUBkrp",
+      "project": {
+        "updatedAt": "2026-10-07T14:38:21.982Z",
+        "createdAt": "2026-10-07T14:32:21.227Z",
+        "id": "8IYIFp5bgtuUBkrp",
+        "name": "Toandromananjara MAHASALOTRA <mbolakely12345@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "cab2f9d4-666c-41cd-8ac6-935c4e9973dd"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

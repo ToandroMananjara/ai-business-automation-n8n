@@ -1,0 +1,825 @@
+{
+  "updatedAt": "2026-10-08T05:58:41.306Z",
+  "createdAt": "2026-10-08T05:56:22.921Z",
+  "id": "YQT2b5ZTFQ9NyvMQ",
+  "name": "WF2 — Extraction documentaire",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "eeca00f1-1d27-5f4c-bed6-9d252e738316",
+      "name": "Webhook",
+      "webhookId": "b3cfca59-1771-58f8-9ef0-a48468a3c074",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "documents",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "XppoAxtDzsEHfIjN",
+          "name": "Webhook X-Api-Key"
+        }
+      }
+    },
+    {
+      "id": "e2d366e1-eeb8-5b62-a811-b3b119945493",
+      "name": "Lire les prompts",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/prompts/{extract_cv.md,extract_invoice.md}",
+        "options": {}
+      }
+    },
+    {
+      "id": "1e0f0e52-e9c7-5f16-b055-183b852f1f29",
+      "name": "Charger les prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Les deux prompts d'extraction, relus à chaque document.\nconst prompts = {};\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const buffer = await this.helpers.getBinaryDataBuffer(i, 'data');\n  prompts[items[i].binary.data.fileName.replace('.md', '')] = buffer.toString('utf8');\n}\nreturn [{ json: { prompts } }];\n"
+      }
+    },
+    {
+      "id": "dcc50963-7210-54dd-aa76-a21f14ad7fa9",
+      "name": "Vérifier la requête",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// La requête : { document_type: \"cv\" | \"invoice\", filename, content_base64, ticket_id?, test_run? }\nconst body = $('Webhook').first().json.body;\nfor (const field of ['document_type', 'filename', 'content_base64']) {\n  if (!body[field]) throw new Error(`Champ obligatoire manquant dans la requête : ${field}`);\n}\nif (!['cv', 'invoice'].includes(body.document_type)) {\n  throw new Error(`document_type inconnu : ${body.document_type} (attendu : cv ou invoice)`);\n}\nconst extension = body.filename.split('.').pop().toLowerCase();\nconst format = extension === 'pdf' ? 'pdf' : extension === 'docx' ? 'docx' : 'autre';\n// Un .docx est une archive zip, mais le node de décompression ne reconnaît une archive\n// qu'à son extension (zip, gzip, tar) : on présente donc le DOCX comme un .zip.\nconst mime = { pdf: 'application/pdf', docx: 'application/zip' }[format] || 'application/octet-stream';\nconst binaryName = format === 'docx' ? `${body.filename}.zip` : body.filename;\nreturn [{ json: {\n  document_type: body.document_type, filename: body.filename, binary_name: binaryName, format, mime,\n  ticket_id: body.ticket_id || '', test_run: body.test_run || '',\n  content_base64: body.content_base64,\n} }];\n"
+      }
+    },
+    {
+      "id": "8693b2cb-d08c-5a3b-a2c6-765b026d6ade",
+      "name": "Convertir en fichier",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "content_base64",
+        "options": {
+          "fileName": "={{ $json.binary_name }}",
+          "mimeType": "={{ $json.mime }}"
+        }
+      }
+    },
+    {
+      "id": "8ff0284f-034f-531a-9be2-70f7f0fb7b29",
+      "name": "PDF ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5260de93-a2f8-5df3-abd1-13130808c4bc",
+              "leftValue": "={{ $('Vérifier la requête').first().json.format }}",
+              "rightValue": "pdf",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "78d3ba76-efcd-5e80-95c9-6aca60f0c7b0",
+      "name": "Extraire le texte du PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        160
+      ],
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "07362e11-0999-5bcd-841c-372dc341c577",
+      "name": "DOCX ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1340,
+        440
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "445b4b4a-9d38-581f-9d8f-72561c208314",
+              "leftValue": "={{ $('Vérifier la requête').first().json.format }}",
+              "rightValue": "docx",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "43cbcb00-dda5-5c90-ab4b-b8e5dd782902",
+      "name": "Décompresser le DOCX",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        1580,
+        360
+      ],
+      "parameters": {
+        "operation": "decompress",
+        "binaryPropertyName": "data",
+        "outputPrefix": "file_"
+      }
+    },
+    {
+      "id": "6435fee3-7144-58b5-961e-663477c067ef",
+      "name": "Lire le texte Word",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        360
+      ],
+      "parameters": {
+        "jsCode": "// Un .docx est une archive zip : le texte est dans word/document.xml.\n// On remplace les fins de paragraphe (</w:p>) par des retours à la ligne, puis on retire les balises.\nconst item = $input.first();\nconst key = Object.keys(item.binary || {}).find(k => item.binary[k].fileName === 'document.xml');\nif (!key) return [{ json: { text: '', method: 'docx (document.xml introuvable)' } }];\nconst xml = (await this.helpers.getBinaryDataBuffer(0, key)).toString('utf8');\nconst text = xml\n  .replace(/<\\/w:p>/g, '\\n')\n  .replace(/<w:tab\\/>/g, '\\t')\n  .replace(/<[^>]+>/g, '')\n  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&apos;/g, \"'\")\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\nreturn [{ json: { text, method: 'docx' } }];\n"
+      }
+    },
+    {
+      "id": "3f2fe958-22ed-56c7-b2da-c115165fd8f4",
+      "name": "Format non pris en charge",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        540
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { text: '', method: 'non pris en charge' } }];\n"
+      }
+    },
+    {
+      "id": "1d62c954-06bd-5444-ac41-651ceed5fa4d",
+      "name": "Évaluer le texte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2040,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Un PDF scanné (une image) ne contient pas de texte : on ne l'envoie pas au LLM.\nconst request = $('Vérifier la requête').first().json;\nconst text = String($json.text || '').trim();\nconst method = $json.method || 'pdf';\nlet problem = '';\nif (request.format === 'autre') problem = `Format non pris en charge (${request.filename}) : à traiter à la main`;\nelse if (text.replace(/\\s/g, '').length < 50) problem = 'Texte illisible ou absent (document scanné ?) : à traiter à la main';\nreturn [{ json: { text, method, readable: !problem, problem } }];\n"
+      }
+    },
+    {
+      "id": "c38844e8-d54f-5bf9-a2f3-a57cd4b843db",
+      "name": "Texte lisible ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2260,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "352a41f3-f452-5f4d-a681-6102f8b168f7",
+              "leftValue": "={{ $json.readable }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3322f0e3-c58c-59d5-8b2c-7a920b38c3e3",
+      "name": "Préparer l'extraction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2500,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const request = $('Vérifier la requête').first().json;\nconst prompts = $('Charger les prompts').first().json.prompts;\nconst system = request.document_type === 'cv' ? prompts.extract_cv : prompts.extract_invoice;\nconst base = { temperature: 0, max_completion_tokens: 1500, response_format: { type: 'json_object' },\n  messages: [{ role: 'system', content: system },\n             { role: 'user', content: `Texte du document (${request.filename}) :\\n\\n${$json.text}` }] };\nreturn [{ json: {\n  request: { ...base, model: $env.LLM_PRIMARY_MODEL, reasoning_effort: 'none' },\n  fallback_request: { ...base, model: $env.LLM_FALLBACK_MODEL },\n} }];\n"
+      }
+    },
+    {
+      "id": "aee5be21-3c05-5280-9ef4-2a98b866d645",
+      "name": "Extraire (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "position": [
+        2720,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ai-business-automation-n8n/0.1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "groqApi": {
+          "id": "qVi1FFao4B95b1EL",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "id": "659e194c-a6bf-5ef2-882c-c0ade1905115",
+      "name": "Extraire (Gemini, secours)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "position": [
+        2940,
+        360
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ai-business-automation-n8n/0.1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Préparer l\\'extraction').first().json.fallback_request) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gS1vW7gJeHgzIHaA",
+          "name": "Gemini API"
+        }
+      }
+    },
+    {
+      "id": "3610e3a5-2700-5f7a-8e85-15dfb7ce18f4",
+      "name": "Valider et contrôler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3160,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Le LLM recopie ; le code vérifie. Pour un CV : champs et durée d'expérience calculée.\n// Pour une facture : HT + TVA = TTC, échéance après la date de facture, devise ISO.\nconst request = $('Vérifier la requête').first().json;\nconst response = $json;\nconst reasons = [];\nlet data = null;\n\nif (response.error) {\n  const raw = String(response.error.description || response.error.message || '');\n  reasons.push(`LLM indisponible (Groq et Gemini) : ${((raw.match(/\\\\?\"message\\\\?\":\\s*\\\\?\"([^\"\\\\]+)/) || [])[1] || raw).slice(0, 200)}`);\n} else {\n  try {\n    data = JSON.parse((response.choices?.[0]?.message?.content || '').trim().replace(/^```(?:json)?\\s*|\\s*```$/g, ''));\n  } catch (e) {\n    reasons.push(`Réponse du modèle illisible (${e.message})`);\n  }\n}\n\nconst isMonth = v => /^\\d{4}-(0[1-9]|1[0-2])$/.test(v || '');\nconst isDate = v => DateTime.fromISO(String(v || '')).isValid;\nconst isEmail = v => /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v || '');\nlet computed = {};\n\nif (data && request.document_type === 'cv') {\n  if (!data.name) reasons.push('Nom absent');\n  if (!isEmail(data.email)) reasons.push('Email absent ou invalide');\n  if (!Array.isArray(data.skills)) reasons.push('Compétences mal formées');\n  // Durée d'expérience calculée par le code, en mois inclusifs, à partir des dates extraites.\n  let months = 0;\n  for (const e of Array.isArray(data.experiences) ? data.experiences : []) {\n    if (!isMonth(e.start) || (e.end !== null && !isMonth(e.end))) { reasons.push(`Dates d'expérience illisibles : ${e.title}`); continue; }\n    if (e.end === null) continue;   // poste en cours : non compté, l'agent complétera\n    const [ys, ms] = e.start.split('-').map(Number);\n    const [ye, me] = e.end.split('-').map(Number);\n    const span = (ye - ys) * 12 + (me - ms) + 1;\n    if (span <= 0) reasons.push(`Expérience terminée avant d'avoir commencé : ${e.title}`);\n    else months += span;\n  }\n  computed = { experience_years: Math.round((months / 12) * 10) / 10 };\n}\n\nif (data && request.document_type === 'invoice') {\n  for (const f of ['supplier', 'invoice_number', 'invoice_date', 'due_date', 'amount_excl_tax', 'tax_amount', 'amount_incl_tax', 'currency']) {\n    if (data[f] === null || data[f] === undefined || data[f] === '') reasons.push(`Champ absent : ${f}`);\n  }\n  const [ht, tva, ttc] = [data.amount_excl_tax, data.tax_amount, data.amount_incl_tax].map(Number);\n  if ([ht, tva, ttc].every(Number.isFinite) && Math.abs(ht + tva - ttc) > 0.01) {\n    reasons.push(`Total incohérent : HT + TVA = ${(ht + tva).toFixed(2)}, TTC indiqué = ${ttc.toFixed(2)}`);\n  }\n  if (isDate(data.invoice_date) && isDate(data.due_date) && data.due_date < data.invoice_date) {\n    reasons.push(`Échéance (${data.due_date}) antérieure à la date de facture (${data.invoice_date})`);\n  }\n  if (data.currency && !/^[A-Z]{3}$/.test(data.currency)) reasons.push(`Devise non ISO : ${data.currency}`);\n}\n\nreturn [{ json: { data, computed, reasons, model: response.model || '' } }];\n"
+      }
+    },
+    {
+      "id": "89ffafd7-2f33-5578-8787-b22fc76091db",
+      "name": "Composer la ligne",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3400,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Assemble la ligne de l'onglet cv ou invoices, quel que soit le chemin suivi.\nconst request = $('Vérifier la requête').first().json;\nconst textCheck = $('Évaluer le texte').first().json;\nconst checked = $('Valider et contrôler').isExecuted ? $('Valider et contrôler').first().json : null;\nconst reasons = checked ? checked.reasons : [textCheck.problem];\nconst d = (checked && checked.data) || {};\nconst base = {\n  processed_at: $now.toISO(), filename: request.filename, format: textCheck.method,\n  status: reasons.length ? 'NEEDS_MANUAL_REVIEW' : 'PENDING_REVIEW',\n  review_reason: reasons.join(' ; '), model: checked ? checked.model : '',\n  execution_id: $execution.id, test_run: request.test_run,\n};\nif (request.document_type === 'cv') {\n  return [{ json: { ...base, ticket_id: request.ticket_id, name: d.name ?? '', email: d.email ?? '', phone: d.phone ?? '',\n    skills: (d.skills || []).join(', '), experience_years: checked ? checked.computed.experience_years ?? '' : '',\n    education: d.education ?? '', document_type: 'cv' } }];\n}\nreturn [{ json: { ...base, supplier: d.supplier ?? '', invoice_number: d.invoice_number ?? '',\n  invoice_date: d.invoice_date ?? '', due_date: d.due_date ?? '', amount_excl_tax: d.amount_excl_tax ?? '',\n  tax_amount: d.tax_amount ?? '', amount_incl_tax: d.amount_incl_tax ?? '', currency: d.currency ?? '',\n  document_type: 'invoice' } }];\n"
+      }
+    },
+    {
+      "id": "62337347-1f7a-580a-9040-e3b8674b4cad",
+      "name": "CV ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3620,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b1c96602-4ef1-5b42-be96-4824dfc1e3d0",
+              "leftValue": "={{ $json.document_type }}",
+              "rightValue": "cv",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "13308e16-6f89-5d22-84ed-023072451114",
+      "name": "Écrire dans cv",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3860,
+        200
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cv"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "handlingExtraData": "insertInNewColumn"
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "id": "dfc1d995-27be-5ee1-b310-7b4a634e34c9",
+      "name": "Écrire dans invoices",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3860,
+        400
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "invoices"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "handlingExtraData": "insertInNewColumn"
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "fshU5mVmgpYUmMeV",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "id": "e2825364-5153-53ca-aa21-d56237e48f32",
+      "name": "Répondre",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4100,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Composer la ligne').first().json) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Lire les prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire les prompts": {
+      "main": [
+        [
+          {
+            "node": "Charger les prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Charger les prompts": {
+      "main": [
+        [
+          {
+            "node": "Vérifier la requête",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vérifier la requête": {
+      "main": [
+        [
+          {
+            "node": "Convertir en fichier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convertir en fichier": {
+      "main": [
+        [
+          {
+            "node": "PDF ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF ?": {
+      "main": [
+        [
+          {
+            "node": "Extraire le texte du PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "DOCX ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DOCX ?": {
+      "main": [
+        [
+          {
+            "node": "Décompresser le DOCX",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format non pris en charge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Décompresser le DOCX": {
+      "main": [
+        [
+          {
+            "node": "Lire le texte Word",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire le texte du PDF": {
+      "main": [
+        [
+          {
+            "node": "Évaluer le texte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire le texte Word": {
+      "main": [
+        [
+          {
+            "node": "Évaluer le texte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format non pris en charge": {
+      "main": [
+        [
+          {
+            "node": "Évaluer le texte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Évaluer le texte": {
+      "main": [
+        [
+          {
+            "node": "Texte lisible ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texte lisible ?": {
+      "main": [
+        [
+          {
+            "node": "Préparer l'extraction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Composer la ligne",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer l'extraction": {
+      "main": [
+        [
+          {
+            "node": "Extraire (Groq)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire (Groq)": {
+      "main": [
+        [
+          {
+            "node": "Valider et contrôler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extraire (Gemini, secours)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire (Gemini, secours)": {
+      "main": [
+        [
+          {
+            "node": "Valider et contrôler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Valider et contrôler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valider et contrôler": {
+      "main": [
+        [
+          {
+            "node": "Composer la ligne",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Composer la ligne": {
+      "main": [
+        [
+          {
+            "node": "CV ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CV ?": {
+      "main": [
+        [
+          {
+            "node": "Écrire dans cv",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Écrire dans invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Écrire dans cv": {
+      "main": [
+        [
+          {
+            "node": "Répondre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Écrire dans invoices": {
+      "main": [
+        [
+          {
+            "node": "Répondre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "dTir5YmlNp369L4p",
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "a2a210df-0a81-4a97-8309-98d1af67e56a",
+  "activeVersionId": "a2a210df-0a81-4a97-8309-98d1af67e56a",
+  "versionCounter": 2,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-10-08T05:56:22.945Z",
+      "createdAt": "2026-10-08T05:56:22.945Z",
+      "role": "workflow:owner",
+      "workflowId": "YQT2b5ZTFQ9NyvMQ",
+      "projectId": "8IYIFp5bgtuUBkrp",
+      "project": {
+        "updatedAt": "2026-10-07T14:38:21.982Z",
+        "createdAt": "2026-10-07T14:32:21.227Z",
+        "id": "8IYIFp5bgtuUBkrp",
+        "name": "Toandromananjara MAHASALOTRA <mbolakely12345@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "cab2f9d4-666c-41cd-8ac6-935c4e9973dd"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}
