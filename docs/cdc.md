@@ -6,7 +6,7 @@
 | **Dépôt** | `ai-business-automation-n8n` |
 | **Type** | Prototype de démonstration (MVP) |
 | **Auteur** | Toandromananjara Mahasalotra |
-| **Version** | 3.4 — 2026-10-07 |
+| **Version** | 3.5 — 2026-10-08 |
 
 Historique des versions :
 
@@ -19,6 +19,7 @@ Historique des versions :
 | 3.2 | Modèles choisis après test comparatif ; calendrier dans le message envoyé au modèle ; filet de sécurité des 48 heures dans le code |
 | 3.3 | Prompt de brouillon : sortie avec citations de FAQ et points non couverts, contrôles automatiques ; passage en JSON simple (troncature silencieuse du mode strict) |
 | 3.4 | WF3 (gestion des erreurs) ; statut `ERROR` quand les deux LLM sont indisponibles ; alertes Slack |
+| 3.5 | WF2 réalisé : PDF et DOCX, détection des scans, contrôles des factures ; FAQ du classeur comme source de vérité ; évaluation de bout en bout |
 
 ---
 
@@ -465,7 +466,20 @@ flowchart TD
 
 WF2 est un sous-workflow : il peut être appelé directement par webhook, ou par WF1 lorsqu'une candidature contient un CV en pièce jointe. La ligne du Sheet `cv` garde alors le `ticket_id` d'origine.
 
-Le MVP traite des **PDF contenant du texte**. Les documents scannés (OCR) sont en V2.
+Formats traités :
+
+| Format | Traitement |
+|---|---|
+| PDF contenant du texte | Extraction du texte (node Extract From File) |
+| DOCX | Un `.docx` est une archive zip : décompression (node Compression), puis lecture du texte de `word/document.xml`. Le node de décompression ne reconnaissant une archive qu'à son extension, le fichier lui est présenté comme `.zip`. |
+| PDF scanné (image) | Texte vide ou presque (moins de 50 caractères) : revue humaine, **sans appel au LLM** |
+| Autre format | Revue humaine, « format non pris en charge » |
+
+La lecture des scans par un modèle multimodal (Gemini accepte images et PDF) est en V2 : cas rares, et un CV contient des données personnelles.
+
+Le prompt de facture impose de **recopier sans corriger** : si le modèle corrigeait un total faux, le contrôle du code ne pourrait plus le détecter.
+
+Résultat sur le jeu de test (5 CV, 5 factures, `data/documents_labels.json`) : **10 documents sur 10 conformes**, dont la facture au total faux et celle à l'échéance incohérente, détectées.
 
 ### 8.2 CV
 
@@ -550,6 +564,8 @@ La FAQ distingue la **politique du centre**, fictive, et les **informations rée
 **Choix assumé :** pas de base vectorielle dans le MVP. Avec quelques dizaines d'entrées, tout le contenu tient dans le contexte du modèle. Un RAG avec embeddings ajouterait de l'infrastructure sans gain mesurable. Il deviendra pertinent quand la base dépassera ce que le contexte peut contenir, ou avec des documents longs non structurés (V2).
 
 Avantage pour l'adoption : un non-développeur enrichit la FAQ en modifiant simplement le Sheet.
+
+**Une seule source de vérité : l'onglet `faq` du classeur.** `data/faq.csv` sert uniquement de valeur initiale, chargée par le WF0. L'évaluation finale passe par le WF1, donc par la FAQ du classeur : ce qui est mesuré est ce qui tourne en production.
 
 ---
 
@@ -648,7 +664,7 @@ Les seuils sont définis **avant** de lancer l'évaluation, pour ne pas les ajus
 
 Avec 30 emails, une seule erreur fait varier un taux de plus de 3 points : ces seuils indiquent une tendance, pas une garantie.
 
-Outil : script d'évaluation dans `eval/`, qui respecte le quota de tokens par minute du fournisseur.
+Outil : `eval/run_eval.py` envoie les 30 emails au **vrai WF1** (webhook de production), marqués d'un identifiant de série de test, compare chaque ticket à son étiquette et écrit `eval/results.md`. Les séries de test ne sont jamais rattachées aux vrais tickets et ne déclenchent pas d'alerte Slack.
 
 ### 13.5 Évaluation des brouillons
 
