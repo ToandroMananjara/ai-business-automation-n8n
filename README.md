@@ -14,6 +14,47 @@ Automatisation du traitement des demandes d'un **centre d'appel au service d'art
 | **Ne perd aucune demande** | Bascule automatique vers un second fournisseur de LLM ; si les deux tombent, ticket `ERROR` créé quand même ; alertes Slack |
 | **Mesure sa propre fiabilité** | 30 emails étiquetés à la main, seuils fixés avant la mesure, comparaison avec une règle par mots-clés |
 
+## Aperçu
+
+**WF1 — Traitement des demandes**, le workflow principal (24 nodes) :
+
+![WF1 dans n8n](docs/screenshots/WF-1.png)
+
+<details>
+<summary><b>WF2 — Extraction des CV et des factures</b> (cliquer pour afficher)</summary>
+
+![WF2 dans n8n](docs/screenshots/WF-2.png)
+
+</details>
+
+<details>
+<summary><b>WF3 — Gestion des erreurs</b></summary>
+
+![WF3 dans n8n](docs/screenshots/WF-3.png)
+
+</details>
+
+<details>
+<summary><b>WF0 — Mise en place du classeur</b></summary>
+
+![WF0 dans n8n](docs/screenshots/WF-0.png)
+
+</details>
+
+<details>
+<summary><b>Alertes Slack</b> (pannes journalisées par le WF3)</summary>
+
+![Alertes dans le canal Slack #alertes](docs/screenshots/slack.png)
+
+</details>
+
+<details>
+<summary><b>Tickets produits</b> dans le classeur Google Sheets</summary>
+
+![Onglet tickets du classeur](docs/screenshots/ticket.png)
+
+</details>
+
 ## Principe directeur
 
 **Le LLM extrait, le code calcule et décide.** Le modèle lit le texte et produit du JSON. Tout le reste est fait par du code déterministe, à partir de règles écrites dans un fichier unique (`config/business_rules.json`) : validation, dates, aiguillage, délais de réponse, revue humaine, contrôle des totaux. Chaque décision du système s'explique par une règle, jamais par « le modèle a jugé que ».
