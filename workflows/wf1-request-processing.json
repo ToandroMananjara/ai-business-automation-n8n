@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T20:29:38.201Z",
+  "updatedAt": "2026-10-07T20:35:27.889Z",
   "createdAt": "2026-10-07T19:17:46.680Z",
   "id": "BMkRNgzkAE6NNaEx",
   "name": "WF1 — Traitement des demandes",
@@ -574,24 +574,16 @@
           "conditions": [
             {
               "id": "08036a87-cc12-5d4d-94aa-e18425e8629d",
-              "leftValue": "={{ $('Composer le ticket').first().json.priority || '' }}",
-              "rightValue": "URGENT",
+              "leftValue": "={{ (() => { const t = $('Composer le ticket').first().json; return (t.priority === 'URGENT' || t.status === 'ERROR') && !t.test_run; })() }}",
+              "rightValue": "",
               "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            },
-            {
-              "id": "05756119-aa31-5a69-bf27-5b491b2e2506",
-              "leftValue": "={{ $('Composer le ticket').first().json.status }}",
-              "rightValue": "ERROR",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
               }
             }
           ],
-          "combinator": "or"
+          "combinator": "and"
         },
         "options": {}
       }
@@ -628,7 +620,7 @@
           "name": "Slack account"
         }
       },
-      "webhookId": "6808d41f-9b91-48a4-b265-e766d90b78b2"
+      "webhookId": "51dcdc67-54eb-40ae-bc99-5df4c26db1c1"
     },
     {
       "id": "575f6522-9cf1-52fd-9a44-3cac3e5ea765",
@@ -965,9 +957,9 @@
   "meta": null,
   "nodeGroups": [],
   "pinData": null,
-  "versionId": "1a255eb6-bdc6-4ecd-af9c-547b66eb9dba",
-  "activeVersionId": "1a255eb6-bdc6-4ecd-af9c-547b66eb9dba",
-  "versionCounter": 5,
+  "versionId": "39b9db40-cd9d-464e-9a69-39a870de7006",
+  "activeVersionId": "39b9db40-cd9d-464e-9a69-39a870de7006",
+  "versionCounter": 6,
   "triggerCount": 1,
   "sourceWorkflowId": null,
   "tags": [],

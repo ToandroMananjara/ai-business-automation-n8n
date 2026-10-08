@@ -193,6 +193,8 @@ Pour un email filtré, `expected_manual_review` vaut `false` et `expected_team` 
 
 Les entrées fictives décrivent un centre d'appel imaginaire : horaires, délais, frais. Les entrées réelles sont sourcées et ne doivent pas être modifiées sans vérifier la source.
 
+**Source de vérité : l'onglet `faq` du classeur, pas ce fichier.** `faq.csv` n'est que la valeur initiale, chargée une fois par le WF0. Ensuite, l'équipe modifie la FAQ dans le classeur, et c'est là que le WF1 la lit. L'évaluation de bout en bout (`eval/run_eval.py`) passe par le WF1, donc par la même FAQ que la production.
+
 **Règle d'injection dans le brouillon :** les entrées de la catégorie principale de l'email, plus toujours les entrées `INFORMATION` (questions générales). Sans cette règle, une question secondaire comme « ouvrez-vous le samedi ? » dans un email de suivi (email 005) n'aurait aucune réponse disponible.
 
 ## Sources des règles
